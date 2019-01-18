@@ -1,0 +1,6 @@
+Martin is working at Genode Labs. He has been especially involved in the custom
+kernel, platform support, networking and testing. Furthermore, he is
+enthusiastic about Genode Labs' yearly Hack'n'Hike and the Microkernel
+Devroom at the FOSDEM.
+
+*GitHub* [https://github.com/m-stein - m-stein]
