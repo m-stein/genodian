@@ -1,0 +1,126 @@
+             Integrating and running automated tests - Part 1
+
+In this article I'd like to give a very practical guide about how you can
+create, integrate and run your custom test scenarios on Genode. In order to do
+so, I'll take a little real-life example and walk through the single steps of
+the very same procedure that I follow everytime I develop a new test. I'll try
+to concentrate rather on the big picture then on all the details. But in turn
+I'll give you pointers to further documentation whenever sensible.
+
+
+Some background for those interested
+------------------------------------
+
+In the very beginning there was only the Makefile and a loose collection of
+tools to bring your test ingredients together and onto the target platform. You
+had to know precisely what to do depending on the specific target and kernel
+you were using and evaluation was done by hand.
+
+Then, the Run tool was introduced to provide a generic interface for the basic
+steps of building, configuring, merging, and evaluating test scenarios. A
+broad set of Run scripts for testing almost every aspect of Genode emerged and
+the Run interface became the ultimate way of describing Genode tests.
+(See the
+[https://genode.org/documentation/release-notes/13.05#Automated_quality-assurance_testing - release notes 13.05])
+
+This was the motivation for pushing the concept a step farther. The Run tool
+could now be equipped with a variety of modules for switching targets on and
+off, transfering boot images, or connecting to means of serial output. With
+these additions, the Run tool provides a way of doing the whole process of
+testing pretty platform-generic, reproducable, and comprehensible.
+(See the
+[https://genode.org/documentation/release-notes/15.02#Modular_tool_kit_for_automated_testing - release notes 15.02]
+or the
+[https://genode.org/documentation/genode-foundations-15-05.pdf - Genode Foundations] boook, chapter 5.4)
+
+However, it has to re-boot the target for each test scenario, which consumes a
+lot of time and stresses hardware. Evaluation is limited to the serial
+connection between host and target, and, of course, it is based on a lot of
+Linux tooling. This becomes a burden when trying to move more of the testing
+process to the on-target Genode. This gave motivation for developing the Depot
+Autopilot. It is a native Genode componenet that moves the loading and
+evaluation of test scenarios to the target. So, multiple tests can be examined
+in one boot cycle and be analysed more directly. Furthermore, the Depot
+Autopilot integrates into the existing test infrastructure through the equally
+named Run script.
+
+In order to transfer tests scenarios from the Run tool to the new component,
+their description must be translated from Run scripts to Genode packages. So
+far, this was done for almost half of the tests, which is why the number of Run
+scripts significantly decreased. New test scenarios are developed, preferably,
+as packages for the Depot Autopilot and also this tutorial follows this
+approach.
+(See the
+[https://genode.org/documentation/release-notes/18.11#Automated_test_infrastructure_hosted_on_top_of_Genode - release notes 18.11]
+or 'repos/gems/src/app/depot_autopilot/README')
+
+
+Step 1: Writing the test
+------------------------
+
+For the purpose of this tutorial I'll try to redo the Expat test. You can find
+the original under 'repos/libports/src/test/expat'. It's a very simple test
+that consists only of one test component that depends on several shared
+libraries with some of them using third-party sources. In the test, the Expat
+XML parser library is used to do some basic XML parsing and print out the
+results to a LOG session.
+
+The very first thing I want to do is writing the source code for my test
+components. For this tutorial, I simplify this process by just copying the
+'repos/libports/src/test/expat' folder to 'repos/libports/src/test/my_expat'.
+
+While writing the source code, I have to take care that the criteria for a
+success or a failure are clearly detectable by the means of LOG session output
+and timing. For the former, I can use the common Genode logging functions
+(Genode::log, Genode::error, Genode::warning) or the logging facilities of the
+runtime I'm using. In the case of the Expat test, this is the POSIX runtime and
+therefore the 'printf' function is used. Also, I can make use of the fact that
+some events are logged automatically by the Genode framework, for instance,
+component exits and uncaught exceptions. But I definitely don't want to rely on
+Core or Kernel output like page-fault messages to make conclusions!
+
+There are also a few restrictions what to print out if I don't want to run in
+problems with the evaluation tooling later. In general, my logging output may
+contain all printable ASCII characters. Also linebreaks, horizontal tabs and
+the color codes used in the Genode logging functions are fine, but, in contrast
+to the printable characters, I will not be able to use them for matching as the
+tooling simply ignores them.
+
+Now to timing. If I want to let timeouts play a role later in the evaluation
+process, The only thing I have to be aware now is that the maximum granularity
+is one second. So I should refrain, for instance, from writing a test that
+counts upwards with a frequency of 100 ms but should fail if it doesn't hit 42
+in 4.2 seconds.
+
+So, let's come back to our Expat test. I choose three criteria:
+
+# Are the parsing results correct?
+# Does the component terminate without having encountered unexpected behavior?
+# Is the execution time within a given time limit?
+
+In order to answer the first question, my Expat test has the 'printf' calls in
+the 'start_element' and 'end_element' functions. To answer the second question,
+the 'printf' calls in the 'main' function indicate unexpected behavior.  But
+likewise, the messages caused by the 'return' statements in the main function
+could be used for this. Question number three, at the other hand, doesn't
+require any preparation in the source code. I'll simply choose a timeout by
+experience.
+
+Next, I want to make sure that my test compiles within a common build
+directory. For the Expat test this means something like:
+
+! <GENODE_DIR>/tool/create_builddir <ARCH>
+! cd <GENODE_DIR>/build/<ARCH>
+! make test/my_expat
+!
+! # (With a more complex test, I may want to add further Make targets)
+
+And now I'll keep debugging the sources until this step succeeds. Although the
+results of this compilation are of no use for the further process, this step
+spares me regular compilation problems when it comes to packaging the test.
+More generally speaking, whenever I have to modify the test sources in the
+future, I'll repeat this step before starting to update the test package
+accordingly.
+
+
+Will be continued soon...
