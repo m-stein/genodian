@@ -1,0 +1,75 @@
+            How to start my VM with the new Sculpt-CE preview
+
+Things have changed a bit with the revised software deployment in the recently
+published
+[https://genode.org/documentation/release-notes/19.02#Sculpt_OS_as_a_community_experience__CE_ - preview of Sculpt CE].
+No matter wether you are updating from Sculpt VC and have installed your VM
+following the
+[https://genode.org/documentation/articles/sculpt-vc - Sculpt-VC documentation]
+or whether you downloaded a fresh Debian with the Sculpt-CE preview - this
+brief walk-through might help you getting it to run (again). Of course, once
+Sculpt CE gets released, the added documentation will explain things way more
+comprehensive.
+
+Until then, the following approach - using the themed window manager - might
+be the easiest way to get along:
+
+# After Sculpt came up, connect to the network on the left-hand panel. This
+  is needed to install software.
+
+# In the '+' menu in the middle, go to "Depot... -> genodelabs -> GUI...",
+  select the "themed wm", and install it. Wait until the download at the left
+  side is finished.
+
+# In the menu in the middle a routing dialog for the themed WM pops up.
+  Use it to connect the themed WM as follows
+
+  * GUI (focus)  -> keyboard focus
+  * GUI          -> system GUI server
+  * Report       -> system reports
+
+  After now clicking "Add component", the component graph in the middle
+  should show the themed WM running.
+
+# For a quick test that the themed WM is running properly, you may
+  start "Depot... -> genodelabs -> Demos... -> nano3d" with the
+  following connection:
+
+  * GUI -> themed wm
+
+  You should now see a spinning 3D shape in a window. After switching to the
+  runtime view by pressing F12, you should be able to move the window around.
+  Switch back to the Leitzentrale view using again the F12 key.
+
+# Start the 'vm_fs' component by clicking on the corresponding launcher
+  at the top level of the '+' menu. This is a chroot instance that provides
+  the VM directory (<sculpt-partition>/vm/debian) as a file system.
+
+# Start the 'shared_fs' component analogously to the VM FS. This chroot
+  instance provides the shared directory (<sculpt-partition>/shared/) as a
+  file system.
+
+# Start the 'usb_devices_rom' component from the '+' menu, which can
+  be used to assign USB devices to the VM.
+
+# Now you can add the VM by selecting
+  "Depot... -> genodelabs -> Virtual machines... -> vbox5-nova-sculpt". Again,
+  a routing dialog pops up. Use it to connect the VM as follows:
+
+  * File system (vm)     -> vm fs
+  * File system (shared) -> shared fs
+  * GUI                  -> themed wm
+  * Network              -> nic router
+  * ROM (capslock)       -> global capslock state
+  * ROM (platform info)  -> platform information
+  * ROM (usb devices)    -> usb devices rom
+  * Report (shape)       -> themed wm
+  * Report               -> system reports
+  * Region maps          -> custom virtual memory objects
+  * Real-time clock      -> system clock
+  * USB                  -> direct USB device access
+
+Now the familiar virtual-machine window should come up in the runtime view.
+
+Thanks to [http://genodians.org/nfeske/index - Norman Feske] for writing the
+prototype of this article as part of a mail discussion!
