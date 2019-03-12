@@ -1,0 +1,315 @@
+             Integrating and running automated tests - Part 2
+
+In this article I'd like to give a very practical guide about how you can
+create, integrate and run your custom test scenarios on Genode. This is the
+second of two parts. If you have missed the
+[http://www.genodians.org/m-stein/2019-01-30-automated-tests-1 - first part],
+you may want to read it first.
+
+
+Step 2: The source archives
+---------------------------
+
+Now that I have written my new 'my_expat' test component, I could hastily
+try to run the Depot-Autopilot run script to evaluate it. But the script would
+reasonably complain as follows:
+
+! Error: unable to guess version of 'test-my_expat' archive
+
+This is because the Genode depot system wouldn't find any recipe to create an
+archive named 'test-my_expat'. This archive is more precisely speaking a
+package that should contain the top level description of my test scenario -
+which ingredients are needed, how to integrate them, and how to interpret the
+test results. But actually I am missing even more, because the above mentioned
+test ingredients themselves must also be available as archives. Besides the
+'my_expat' component, I want, for example, also an Init component to act as
+runtime environment. And an archive for the 'my_expat' component creates
+further dependencies. Because the component makes use of shared libraries like
+'expat' and I wouldn't want to mix a shared library in an archive of a
+component that uses it but rather have it in a dedicated archive.
+So, the link between my component and a ready-to-use test scenario can be
+depicted as a tree where the leafes are the actual content (e.g. source code):
+
+! recipes/pkg/test-my_expat
+!   |
+!   +-> recipes/src/test-my_expat --+-> src/test/my_expat
+!   |                               |
+!   +-> recipes/src/expat           +-> recipes/api/expat -> ...
+!   |                               |
+!   +-> recipes/src/init            +-> recipes/api/libc -> ...
+!   |
+!   +-> ...
+
+Fortunately, all archives that my test requires, except 'pkg/test-my_expat' and
+'src/test-my_expat', already exist. So, I start with the 'src/test-my_expat'
+archive:
+
+! cd <GENODE_DIR>
+! mkdir -p repos/libports/recipes/src/test-my_expat
+! vim repos/libports/recipes/src/test-my_expat/content.mk
+
+The archive shall trigger the creation of the 'test-my_expat' binary.
+In order to achive this, it needs, first of all, the corresponding 'target.mk'
+file:
+
+! # file repos/libports/recipes/src/test-my_expat/content.mk
+! content:
+! 	mkdir -p src/test/my_expat
+! 	cp $(REP_DIR)/src/test/my_expat/target.mk src/test/my_expat/
+
+Then I add a bogus initial version and hash:
+
+! echo 1970-01-01 0 > repos/libports/recipes/src/test-my_expat/hash
+
+And give the recipe a first try:
+
+! tool/depot/create genodelabs/bin/x86_64/test-my_expat \
+! 	CROSS_DEV_PREFIX=genode-x86- -j4 UPDATE_VERSIONS=1 FORCE=1
+
+This silently fixes my bogus hash file and then complains about some missing
+library makefiles. Sidenote: If, at some point, the create tool doesn't act as
+described in this article, you may try to reset your depot directory and try
+again (be aware that this deletes all your previously created archives, so, you
+might want to do this in a temporary copy of your genode directory):
+
+! rm -rf depot && git checkout HEAD depot
+
+Now, back to the main track: I can see now that the source archive was created
+as expected but no binary could be compiled from this:
+
+! ls depot/genodelabs/src/test-my_expat/<LATEST_VERSION>/src/test/expat
+! 	target.mk
+! ls depot/genodelabs/bin/x86_64/test-my_expat/<LATEST_VERSION>
+! 	
+
+I can solve the missing libraries by simply referencing the - as mentioned
+earlier - already existing API archives:
+
+! export USED_APIS=libports/recipes/src/test-my_expat/used_apis
+! echo base  >  $USED_APIS
+! echo expat >> $USED_APIS
+! echo posix >> $USED_APIS
+! echo libc  >> $USED_APIS
+
+When running the create command again, I get a bit further:
+
+!  ...
+!  Library ldso-startup
+!  Library expat
+!  Library ld
+!  Library libc
+!  Library posix
+!  Library libm
+!  Library base
+!  Program test/expat/test-my_expat
+!    LINK     test-my_expat
+!  genode-x86-g++: error: main.o: No such file or directory
+
+Of course, I didn't copy the corresponding C++ file from test/my_expat to the
+source archive (I did this to ensure that I don't copy stuff to the source
+archive that isn't needed). Let's enhance the 'content.mk' file accordingly:
+
+! # file repos/libports/recipes/src/test-my_expat/content.mk
+! content:
+! 	mkdir -p src/test/my_expat
+! 	cp $(REP_DIR)/src/test/my_expat/target.mk src/test/my_expat/
+! 	cp $(REP_DIR)/src/test/my_expat/main.cc   src/test/my_expat/
+
+Now, the create command produces the desired result:
+
+! ls depot/genodelabs/bin/x86_64/test-my_expat/<LATEST_VERSION>
+! 	test-my_expat
+
+If you want to know more about archives and the depot, you may read this
+[https://genode.org/documentation/developer-resources/package_management - online documentation]
+or section 5.5 in the
+[http://genode.org/documentation/genode-foundations-18-05.pdf - Genode Foundations book].
+
+
+Step 3: The package archives
+----------------------------
+
+Let's integrate the test into a package archive. First, I create the package
+skeleton:
+
+! mkdir -p libports/recipes/pkg/test-my_expat
+! echo 1970-01-01 0 > repos/libports/recipes/pkg/test-my_expat/hash
+! echo "my expat test" > repos/libports/recipes/pkg/test-my_expat/README
+
+Then, I declare which archives must be build for my test package:
+
+! export ARCHIVES=repos/libports/recipes/pkg/test-my_expat/archives
+! echo "_/src/init"          >  $ARCHIVES
+! echo "_/src/test-my_expat" >> $ARCHIVES
+! echo "_/src/expat"         >> $ARCHIVES
+! echo "_/src/libc"          >> $ARCHIVES
+! echo "_/src/vfs"           >> $ARCHIVES
+! echo "_/src/posix"         >> $ARCHIVES
+
+Finally, I have to describe the runtime of my test. This is done through the
+runtime XML file. The top level of this file describes the runtime component
+itself (Init in my case):
+
+! <!-- excerpt from repos/libports/recipes/pkg/test-my_expat/runtime -->
+! <runtime ram="32M" caps="1000" binary="init">
+!   ...
+! </runtime>
+
+Then, I add four sub-nodes:
+
+! <!-- excerpt from repos/libports/recipes/pkg/test-my_expat/runtime -->
+! <runtime ram="32M" caps="1000" binary="init">
+!   <config>   ... </config>
+!   <content>  ... </content>
+!   <requires> ... </requires>
+!   <events>   ... </events>
+! </runtime>
+
+Into the <config> sub-node, I put the Init configuration that causes the Init
+to start and connect the components for my test properly:
+
+! <!-- excerpt from repos/libports/recipes/pkg/test-my_expat/runtime -->
+! ...
+! <config>
+! 	<parent-provides>
+! 		<service name="ROM"/>
+! 		<service name="PD"/>
+! 		<service name="RM"/>
+! 		<service name="CPU"/>
+! 		<service name="LOG"/>
+! 		<service name="IO_PORT"/>
+! 		<service name="IRQ"/>
+! 		<service name="Timer"/>
+! 	</parent-provides>
+! 	<default-route>
+! 		<any-service> <parent/> <any-child/> </any-service>
+! 	</default-route>
+! 	<default caps="200"/>
+! 	<start name="test-my_expat">
+! 		<resource name="RAM" quantum="2M"/>
+! 		<config>
+! 			<vfs>
+! 				<inline name="config"><config>
+! 						<test_tag test_attribute="test_value" />
+! 					</config>
+! 				</inline>
+! 				<dir name="dev"> <log/> </dir>
+! 			</vfs>
+! 			<libc stdout="/dev/log"/>
+! 		</config>
+! 	</start>
+! </config>
+
+While creating this configuration, I already recognize, that later the Depot
+Autopilot must make some files - here the expat program and library binaries -
+availabe to the runtime. This is what the <content> node is for:
+
+! <!-- excerpt from repos/libports/recipes/pkg/test-my_expat/runtime -->
+! ...
+! <content>
+! 	<rom label="ld.lib.so"/>
+! 	<rom label="libc.lib.so"/>
+! 	<rom label="libm.lib.so"/>
+! 	<rom label="posix.lib.so"/>
+! 	<rom label="vfs.lib.so"/>
+! 	<rom label="expat.lib.so"/>
+! 	<rom label="test-my_expat"/>
+! </content>
+
+As you may have noticed in the configuration, instead of spawning a timer
+driver, I've routed the Timer service to the parent. As it would be cumbersome
+to start required drivers for each test anew, the Depot-Autopilot run-script
+starts drivers outside the tests and hands-in the required sessions. Thus, I
+have to tell the outer world that I need a Timer via the <requires> tag:
+
+! <!-- excerpt from repos/libports/recipes/pkg/test-my_expat/runtime -->
+! ...
+! <requires> <timer/> </requires>
+
+Last but not least, I want to tell the Depot-Autopilot component how to
+evaluate the result of my test. I can tell it to inspect the LOG sessions for
+bad or good string patterns and install a timeout to make sure that my test
+doesn't block the whole system. All this goes to the <events> tag:
+
+! <!-- excerpt from repos/libports/recipes/pkg/test-my_expat/runtime -->
+! ...
+! <events>
+! 	<log     meaning="succeeded">
+! 		[init -> test-my_expat]  start of element: config*
+! 		[init -> test-my_expat]  start of element: test_tag*
+! 		[init -> test-my_expat]  attribute: name='test_attribute', value='test_value'*
+! 		[init -> test-my_expat]  end of element: test_tag*
+! 		[init -> test-my_expat]  end of element: config*
+! 		"test-my_expat" exited with exit value 0
+! 	</log>
+! 	<log     meaning="failed">Error: </log>
+! 	<timeout meaning="failed" sec="10" />
+! </events>
+
+This is all. I can successfully create my package now:
+
+! tool/depot/create genodelabs/pkg/x86_64/test-my_expat \
+! 	CROSS_DEV_PREFIX=genode-x86- -j4 UPDATE_VERSIONS=1 FORCE=1
+! ls depot/genodelabs/pkg/test-my_expat/<LATEST_VERSION>
+! 	archives  README  runtime
+
+
+Step 4: Running the Depot Autopilot
+-----------------------------------
+
+First, I'd like to give my test a try without being disturbed by the whole
+battery of available tests:
+
+! cd <BUILD_DIRECTORY>
+! KERNEL=nova TEST_PKGS=test-my_expat TEST_SRCS= make run/depot_autopilot
+
+Most propably, this will complain about some missing archives and provide a
+depot/create command line that will fix the problem. I do as advised (for more
+convenience, I also add 'UPDATE_VERSIONS=1' to the command line) and as soon
+as all archives are built, I retry to run the Depot-Autopilot command. The
+scenario starts and through the serial output the Depot Autopilot tells me
+something like:
+
+! --- Run "test-my_expat" (max 10 sec) ---
+! 
+! 4.340 [init -> test-my_expat] Warning: rtc not configured, returning 0
+! 4.396 [init -> test-my_expat]  start of element: config
+! 4.406 [init -> test-my_expat]  start of element: test_tag
+! 4.412 [init -> test-my_expat]  attribute: name='test_attribute', value='test_value'
+! 4.420 [init -> test-my_expat]  end of element: test_tag
+! 4.429 [init -> test-my_expat]  end of element: config
+! 4.644 [init] child "test-my_expat" exited with exit value 0
+! 
+!  test-my_expat                   ok         4.644  log "[init -> test-my_expat]  start o ..."
+! 
+! --- Finished after 6.358 sec ---
+! 
+!  test-my_expat                   ok         4.644  log "[init -> test-my_expat]  start o ..."
+! 
+! succeeded: 1 failed: 0 skipped: 0
+
+I might want to debug the test. In this case, the additional environment
+variables considered by the run script become helpful:
+
+! KERNEL=nova \
+! 	TEST_PKGS=test-my_expat \
+! 	TEST_SRCS= \
+! 	TEST_BUILDS="test/expat init" \
+! 	TEST_MODULES="test-expat init expat.lib.so" \
+! 	TEST_REPEAT=until_failed make
+! 	run/depot_autopilot
+
+You can read about all this in more detail in the README file of the Depot
+Autopilot:
+
+! <GENODE_DIR>/repos/gems/src/app/depot_autopilot/README
+
+In the end, I can add my test permanently to the Depot-Autopilot run-script
+by enhancing the default packages list:
+
+! # excerpt from repos/gems/run/depot_autopilot.run
+! ...
+! set default_test_pkgs {
+! 	test-my_expat
+! 	...
+! }
