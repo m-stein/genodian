@@ -1,0 +1,152 @@
+               Spunky: A kernel using Ada - Part 1: RPC
+
+In this series of articles I'll illustrate a hobby project of mine that is
+trying to create a kernel for Genode written in Ada 2012. This project is not
+about writing a kernel from scratch but rather successively take parts from the
+existing base-hw kernel and translate them to Ada. Thus, the design mainly
+follows the approach taken with base-hw. To be able to test the already
+translated parts I link them together with the remaining parts from base-hw.
+The interfacing between the Ada and the C++ parts is done on the level of
+object methods. Over time, the code-base of the new kernel will become more and
+more Ada and less C++. Maybe later this work will also lead to some formal
+verification with SPARK but for now, I'm happy with Ada. So let's go!
+
+You can find the code behind this article on my
+[https://github.com/m-stein/genode/commits/spunky_rpc - github branch].
+If you're interested in the recent state of my work, you may have a look at
+the [https://github.com/genodelabs/genode/issues/3308 - github issue].
+
+
+Executing Ada in the kernel
+---------------------------
+
+Before thinking about any Ada translations, I had to enable the compilation and
+execution of Ada code in the kernel. So far, Ada was used only in user-land
+components where we can simply link against the 'spark' library for run-time
+support. This isn't an option in the kernel at least for the fact that the
+library is shared. So, I wrote a little Ada "Hello World" for base-hw and tried
+to execute it from within the kernel. For a start, I decided to put the Ada
+sources into a new sub-directory of base-hw (src/core/ada) and postpone the
+work of creating a new repository. To make it work, I started adding
+Ada-run-time ingredients from the 'spark' library and library import to the
+'core-hw' library. I had to adapt some paths in the new dependencies as they
+could no longer implicitly refer to their original repository (libports).
+Within a short time, I had it working.
+
+
+Preparing a translation to Ada
+------------------------------
+
+As the first subject for my translation, I choose the RPC state machine of
+base-hw, called "IPC node". The C++ implementation of this unit has a pretty
+good abstraction against the rest of the kernel and its model and interface
+aren't too big.
+
+As a first step I reviewed the C++ implementation and recognized several
+design details that I wanted to change in order to make it fit better into the
+Ada world. I did these adaptions beforehand in the working implementation, so,
+they would not add up to the error potential of the translation process.
+
+On thing was that IPC node had virtual methods that were overridden by the
+thread class that inherited from IPC node. Admittedly, I don't know whether
+virtual methods in Ada which are overridden in C++ are impossible. But at least
+they would have complicated things plus, in my experience, reducing the use of
+inheritance isn't a bad thing. Thus, IPC node became a member of the thread
+class and holds a reference to its thread object in order to call the
+previously virtual methods.
+
+Another annoying fact was that IPC node also did the transmission of the
+message content and its attached capabilities from on protection domain to
+another. This implied that IPC node needed to know the UTCB layout, the
+protection-domain interface, and the capability management. All this could be
+avoided without big modifications by making it a concern of the thread class
+and let IPC node concentrate merely on the state machine behind RPC.
+
+The third adaption arose from the two facts that Ada procedures don't have
+return values and that, for better compatibility with SPARK, I don't want to
+have functions with writable arguments. This means, that a sub-program can't
+modify it's arguments and have a return value at the same time. But this was
+the case in the original IPC node. I solved this by replacing the original
+method with two new ones - one that does the modifications and a one that
+returns the desired value - and made clear through their names, in which order
+to call them.
+
+
+Re-implementing RPC in Ada
+--------------------------
+
+After all this preparation, I started re-implementing the IPC node semantics in
+a new Ada package 'IPC_Node'. The object layout is represented by a private
+record type 'IPC_Node.Object_Type'. Constructor and destructor are represented
+by the procedures 'IPC_Node.Initialize_Object' and
+'IPC_Node.Deinitialize_Object'.
+
+The first argument of each Ada sub-program representing a C++ method is the
+object. When the C++ method is constant, the first argument of the Ada
+sub-program is "in", otherwise "in out". When the C++ method stores a
+reference to the object, the first argument of the Ada sub-program is a "not
+null access" to the object type. This avoids problems with different access-
+type scopes.
+
+As IPC node internally also uses a queue of IPC nodes, I did a
+re-implementation of this class (the private package 'IPC_Node.Queue') using
+the same pattern as mentioned above. I tried to implement the queue also as
+generic package to be able to re-use it for other item types but it didn't work
+out yet.
+
+Wherever IPC node calls a method on its thread object, I just skipped the call
+and instead left a comment in the place to remind me to add the call later.
+This way, I was able to skip the details of the C++-Ada interfacing completely
+during the re-implementation step.
+
+One interesting detail of the re-implementation is the sub-program
+'IPC_Node.For_Each_Helper'. In C++, this is a function template that takes a
+lambda function and applies it to multiple IPC nodes. The lambda function, in
+fact, is always a method of the thread class. Surprisingly for me, this can be
+works just fine using sub-program access types to in Ada although the accessed
+sub-program is a C++ method.
+
+
+Bringing the C++ and the Ada world together
+-------------------------------------------
+
+Once, the Ada IPC node was compiling - which was quite an effort as I treat
+warnings as errors and have style warnings enabled - I wanted to integrate it
+into the rest of the base-hw kernel to see whether it works. To keep things as
+clear as possible I put the C++ glue-code in extra packages with names all
+starting with "CPP". For instance, the package 'IPC_Node' is accompanied by a
+package 'CPP_IPC_Node' which has the same public interface but with
+C++-compliant types. The sub-programs of 'CPP_IPC_Node' translate from the
+C++-compliant types to types natural to Ada and then call the corresponding
+sub-program in 'IPC_Node'. They can later also be used to fulfill preconditions
+of the 'IPC_Node' package.
+
+In the C++ world, I replaced the original IPC node with a place-holder that
+still declares the public IPC-node interface but lacks implementations. It also
+contains no member variables except a byte array that bloats the corresponding
+objects to the size needed in the Ada world. The sub-programs of 'CPP_IPC_Node'
+are then exported to the symbols of the place-holder methods in C++. By doing
+this, 'Ipc_node' objects can be used in the C++ world as usual while the
+implementation stays in Ada. In Ada, on the other hand, I don't have to deal
+with memory management because a reference to a sufficient object space (the
+byte array) is always handed in from the C++ side. All packages are therefor
+pure.
+
+The last thing missing was the integration of the thread calls I postponed
+earlier. I added them through a new package 'CPP_Thread', whose public
+interface declares all the sub-programs called by 'IPC_Node' but imports the
+implementations from the C++ thread class.
+
+To make the whole interfacing a bit safer, I finally added an initial check
+'assert_valid_object_size' to the C++ world, which uses the Ada sub-program
+'CPP_IPC_Node.Object_Size' to ensure that the place-holder size is sufficient.
+
+
+Running the kernel with the Ada implementation of RPC
+-----------------------------------------------------
+
+What should I say? Thanks to the almost pedantic need for correctness of the
+Ada compiler and the sheer endless chain of complains it kept throwing at me,
+the final image worked out of the box and put a big smile on my face :-)
+
+To be continued...
