@@ -1,0 +1,67 @@
+           User-friendly handling of missing ports in depot tools
+
+I enjoy the elegant and potent system behind packages in Genode. Therefore I
+found it particularly sad that, for me, a tiny, rather superficial issue always
+dimished the user experience: Missing archives of third-party code, called
+ports, are reported only one at a time, and each time, the user has to push the
+process forward manually. Because of this, building large packages like Sculpt
+with dependencies to over 20 of these ports, can become an annoying task.
+
+For the Hack'n'Hike gathering 2019, I wanted this to be my pet project. It's
+not a big thing but it makes my life and hopefully those of others more
+enjoyable. Now, the tools 'tool/depot/extract' and 'tool/depot/create' give me
+the following when calling them with the typical sculpt packages in a fresh
+Genode directory:
+
+! tool/depot/create \
+!   genodelabs/pkg/x86_64/sculpt genodelabs/bin/x86_64/base-nova \
+!   -j4 UPDATE_VERSIONS=1
+!
+! Error: Ports not prepared or outdated:
+!   bash coreutils curl dde_ipxe dde_linux dde_rump e2fsprogs ...
+!
+! You can prepare respectively update them as follows:
+!   /.../tool/ports/prepare_port bash coreutils curl dde_ipxe ...
+
+But I'm a lazy guy, so I use the new 'PREPARE_PORTS' flag for automatic
+creation of missing ports (note that this implies downloading and modifying
+files in your 'contrib' directory without further asking for permission):
+
+! tool/depot/create \
+!   genodelabs/pkg/x86_64/sculpt genodelabs/bin/x86_64/base-nova \
+!   -j4 UPDATE_VERSIONS=1 PREPARE_PORTS=1
+!
+! Ports not prepared or outdated:
+!   bash coreutils curl dde_ipxe dde_linux dde_rump e2fsprogs ...
+!
+! Preparing ports...
+!
+! bash  download http://ftp.gnu.org/gnu/bash/bash-4.4.18.tar.gz
+! ...
+! coreutils  download https://ftp.gnu.org/gnu/coreutils/...
+! ...
+! curl  download http://curl.haxx.se/download/curl-7.29.0.tar.gz
+! ...
+! created genodelabs/api/block_session/2019-05-05
+! created genodelabs/api/base/2019-05-17
+! created genodelabs/api/base-nova/2019-05-17
+! ...
+
+As you can see, after preparing all missing ports, the tool directly comes back
+to its original job - the creation of depot archives. Note, that the stage of
+preparing ports also considers the '-j' flag that I added to the 'create' call.
+
+In case I merely want to know which ports are needed for building a given set
+of archives, I can use the new tool 'tool/depot/missing_ports' :
+
+! tool/depot/missing_ports \
+!   genodelabs/pkg/x86_64/sculpt \
+!   genodelabs/bin/x86_64/base-nova
+! bash coreutils curl dde_ipxe dde_linux dde_rump e2fsprogs ...
+
+The simple list output is also suitable for being processed in an automated
+way.
+
+Currently, these features are waiting for their merge to the official master
+branch but, if you like, you can give them a try on my
+[https://github.com/m-stein/genode/commits/depot_missing_ports - topic branch].
