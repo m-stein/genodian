@@ -1,0 +1,297 @@
+           Type-safe bit access using the register framework
+
+Years ago, when I wrote my first device drivers for Genode, I found myself
+thinking about a very common problem in this area: MMIO regions that are
+structered with bit-granularity. Accessing such structures in C++ was normally
+done with hand-crafted bit arithmetics that not seldom ended-up in long
+cryptographic statements with raised error potential. Type-safety in this field
+is highly desirable to improve driver development but unfortunately not part of
+the basic C++ features. This initiated the development of the so-called MMIO
+framework in Genode, which later evolved into the more generic Register
+framework. Over the years, the Register framework has become the prefered tool
+to describe and access sub-byte structures of any type (not only MMIO) in
+Genode and has received a lot of handy features of which I'd like to give an
+overview in this article.
+
+To make a start, let me first show you how the framework is structured, so,
+we can afterwards walk through the single modules:
+
+[image register_framework 100%]
+
+As you can see, the modules are sorted from the most generic aspects at the top
+(pure bit arithmetics) to the most specific ones at the bottom (different types
+of raw hardware access).
+
+
+Doing bit arithmetics without an underlying address space
+---------------------------------------------------------
+
+So, let's start with a simple use-case for the 'util/register.h' header.
+Imagine we have a 16-bit-wide machine status that contains multiple
+characteristics of the machine with each consuming only part of the 16 bits:
+
+! /*
+!  * bits 12..11: color, 11..10: alarm, 10..6: temp, 3: on
+!  * color 0: blue, 1: red, 2: green
+!  */
+! uin16_t  state { 2 << 11 | 49 << 6 | 1 << 3 }
+! uint16_t alarm { (state >> 10) & 3 };
+
+Notice that the alarm field intentionally overlaps with the temperature and
+color field. Now, this version looks pretty awkward and the bug it contains
+remains unobtrusive and fatal: The temperature value is higher than allowed
+which silently corrupts the color and alarm value. Let's do this again using
+the register header:
+
+! struct State : Register<16>
+! {
+!   struct On    : Bitfield< 3, 1> { };
+!   struct Temp  : Bitfield< 6, 5> { };
+!   struct Alarm : Bitfield<10, 2> { };
+!   struct Color : Bitfield<11, 2> {
+!     enum { BLUE = 0, RED = 1, GREEN = 2 }; }
+! };
+!
+! State::access_t state { 0 };
+! State::On   ::set(state, 1);
+! State::Color::set(state, State::Color::GREEN);
+! State::Temp ::set(state, 49);
+!
+! State::access_t alarm { State::Alarm::get(state) };
+
+The first parameter of the 'Bitfield' templates always denotes the least
+significant bit that is part of the bit field and the second parameter is the
+width of the bit field. Admittedly, this version is longer than the first one
+but much more descriptive. Furthermore, it won't let any access violate the
+bit-field ranges. Consequently, the effective temperature value will
+automatically be restricted to 49 mod 2^5 = 17 leaving the color and alarm
+value sane. There are a lot of other useful methods in the 'Bitfield' template
+that you should have a look at, but 'get' and 'set' are the ones most
+frequently used.
+
+Another cool thing that the register header provides are bit sets. A bit set
+can combine multiple bitfields or registers to a new entity that can be
+accessed at once. Let's have a look at this example of a page descriptor used
+for resolving virtual addresses in a page table:
+
+! struct Page_descriptor : Register<32>
+! {
+!   struct Size_0_3 : Bitfield< 4, 3> { };
+!   struct Size_3_2 : Bitfield<20, 2> { };
+! };
+
+The page-size field is 5 bits wide in total but the most significant two bits
+are located separetly from the less significant three bits. Normally, I would
+have to split up the desired size value for each write and merge it again
+after each read. A bit set can spare me this tedious and error-prone work:
+
+! struct Page : Register<32>
+! {
+!   struct Size_0 : Bitfield< 4, 3> { };
+!   struct Size_1 : Bitfield<20, 2> { };
+!   struct Size   : Bitset_2<Size_0, Size_1> { };
+! };
+! Page::access_t page { 0 };
+! Page::Size::set(page, 30);
+! Page::access_t size = Page::Size::get(page);
+
+This mechanism is pretty flexible: In the template arguments of the bit set I
+can mix bit fields with registers and even other bit sets, which allows me to
+combine an arbitrary number of entities (but there's also a bit-set template
+with 3 parameters to simplify things). We'll see this in a later example.
+
+
+Combining bit arithmetics with an address space
+-----------------------------------------------
+
+Let's come back to our initial example of the machine state. We might want not
+only to keep the state in memory but also communicate it to the machine. In
+this scenario, register sets become handy. A register set can map multiple
+registers to a contiguous address space, like an MMIO region or the address
+space of an I2C bus. In order to do so, it needs to be combined with the raw
+representation (dimensions, access methods) of that address space. This is
+exactly what the modules in the bottom line of the initial overview picture
+do. In fact, one could add further types of address spaces here by adopting
+the pattern used for MMIO and I2C.
+
+As register sets work the same for each type of address space, we can choose
+which ever we like for our example. I'd say our machine communicates via MMIO:
+
+! #include <util/mmio.h>
+!
+! struct Mach : public Mmio
+! {
+!   Mach(addr_t const base) : Mmio(base) { }
+!
+!   struct State : Register<0x1010, 16>
+!   {
+!     struct On    : Bitfield<3,1> { };
+!     struct Temp  : Bitfield<6,5> { };
+!     ...
+!   };
+! };
+! Mach mach(0x80004000);
+! mach.write<Mach::State>(0);
+! mach.write<Mach::State::On>(1);
+! Mach::State::access_t temp =
+!   mach.read<Mach::State::On>();
+
+The registers of register sets have an additional template parameter that
+denotes the address of the register within its MMIO region. Within the memory
+address-space our state register would therefore be located at:
+
+! 0x80005010 =
+!   MMIO base 0x80004000 + register base 0x1010
+
+Writing only a bit field, as done above with 'State::On', results in a partial
+update of the register. Therefore the framework first reads out the current
+value of the whole register, modifies the bit field in the read value and then
+writes back the modified value. For some registers, however, this might not be
+the desired behavior. IRQ state registers, for example, often have a semantic
+where each write of a logical "1" triggers an action like reseting the
+corresponding IRQ. In such a case, re-writing all logical "1"s from the old
+register state would be a bad thing. Therefore, we can mark such registers as
+"strict-write" via an optional third template parameter:
+
+! struct Mach : public Mmio
+! {
+!   ...
+!   struct Irq : Register<0x40,   8, true> {
+!     struct Bit_6 : Bitfield<6,1> { }; };
+! };
+! ...
+! mach.write<Mach::Irq::Bit_6>(1);
+
+This would cause a simple write of value 0x20 to the register independent from
+its former content.
+
+Of course, we can also add bit sets to register sets and their registers:
+
+! struct Mach : public Mmio
+! {
+!   ...
+!   struct Ctl : Register<0x20, 8> {
+!     struct Mode_0 : Bitfield<2,1> { };
+!     struct Mode_2 : Bitfield<8,1> { };
+!   };
+!   struct Mode_1 : Register<0x40, 8> { };
+!   struct Mode_3 : Register<0x60, 8> { };
+!
+!   struct Mode_0_1 : Bitset_2<Ctl::Mode_0,
+!                              Mode_1> { };
+!
+!   struct Mode : Bitset_3<Mode_0_1,
+!                          Ctl::Mode_2,
+!                          Mode_3> { };
+! };
+! ...
+! mach.write<Mach::Mode>(0x15);
+
+In this example, the machine mode field is 18 bits wide but spread over
+different bit fields and registers. By using two nested bit sets, we can
+access it through 'Mode' just like a simple coherent bit field.
+
+But there's even more fancy stuff we can do with register sets. Imagine we
+have a machine with 1024 binary switches. The machine lets us read and write
+the state of each of these switches through a set of 32 consecutive
+32-bit-wide registers where each bit stands for one switch. Declaring all 32
+registers and their bit layout individually would result in a lot of code but
+we can write it simpler using register arrays:
+
+! struct Mach : public Mmio
+! {
+!   ...
+!   struct Switches : Register_array<0x1010, 32, 1024, 1> {
+!     struct State : Bitfield<0, 1> { }; };
+! };
+! ...
+! mach.write<Mach::Switches::State>(0, 243);
+! Mach::Switches::access_t switch931 =
+!   mach.read<Mach::Switches::State>(931);
+
+This declares an array that starts at MMIO offset 0x1010 with an access width
+of 32 bits. The array contains 1024 items of bit width 1. Each of the items
+contains the layout declared inside 'Switches', i.e., only one bit field named
+'State'. Then we set switch 243 to "0" and read out switch 931. This is how
+the array would look like in memory:
+
+! 0x1010: Register 0  -----------+--------------+
+!                      Item 0    | Bit 0: State |
+!                               -+--------------+
+!                      ...       | ...          |
+!                               -+--------------+
+!                      Item 31   | Bit 0: State |
+! 0x1014: Register 1  -----------+--------------+
+!                      Item 32   | Bit 0: State |
+!                               -+--------------+
+! ...                  ...       | ...          |
+!                                |              |
+! 0x200c: Register 31 -----------+--------------+
+!                      ...       | ...          |
+!                               -+--------------+
+!                      Item 1023 | Bit 0: State |
+! 0x2010: End         -----------+--------------+
+
+Items of register arrays can also have a more complex layout. Let's assume
+it's not switches we're controlling but gates that can be opened gradually.
+They can be told to send an interrupt when reaching the desired aperture and
+they propagate the material throughput:
+
+! struct Mach : public Mmio {
+!   ...
+!   struct Gates : Register_array<0x44, 16, 23, 11> {
+!     struct Apert     : Bitfield<0, 4> { };
+!     struct Apert_irq : Bitfield<4, 1> { };
+!     struct Throughp  : Bitfield<5, 5> { };
+!   };
+! };
+! ...
+! for (int gate = 0; gate <= 23; gate++) {
+!   mach.write<Mach::Gates>           ( 0, gate);
+!   mach.write<Mach::Gates::Apert_irq>( 1, gate);
+!   mach.write<Mach::Gates::Apert>    (13, gate);
+! }
+
+The loop walks over all array items. For each item, it first resets the whole
+item, then it writes two of its bit fields. As you can see, array items must
+not necessarily match up with the access type (the items are of bit width 11
+whereas the access is done with 16-bit-wide integers). The framework can deal
+with items crossing the borders of the underlying access type. The memory
+layout for this array would look as follows:
+
+! 0x44: Register 0  -----------+-----------------------+
+!                    Item 0    | Bits   0-3: Apart     |
+!                              | Bits     4: Apart_irq |
+!                              | Bits   5-9: Throughp  |
+!                              | Bits    10: -         |
+!                             -+-----------------------+
+!                    Item 1    | Bits   0-3: Apart     |
+!                              | Bits     4: Apart_irq |
+! 0x46: Register 1  -----------+ Bits   5-9: Throughp  |
+!                              | Bits    10: -         |
+!                             -+-----------------------+
+! ...                ...       | ...                   |
+!                             -+-----------------------+
+!                    Item 22   | Bits   0-3: Apart     |
+! 0x62: Register 30 -----------+ ...                   |
+!                             -+-----------------------+
+!                    Item 23   | Bits   0-3: Apart     |
+!                              | ...                   |
+!                             -+-----------------------+
+!                    -         | -                     |
+! 0x64: End         -----------+-----------------------+
+
+By the way, the "write-strict" mode mentioned above for registers can also be
+enabled for register arrays by setting the optional fifth template parameter
+to 'true':
+
+! struct Mach : public Mmio {
+!   ...
+!   struct Irqs : Register_array<0x20, 64, 1, 1024, true> {
+!     ... };
+! };
+
+Now, I know this escalated quickly and might have become a bit complex in the
+end but I'd like to encourage you to just try it out. The framework was
+designed to be intuitive to use and if it nonetheless leaves you puzzled,
+please don't hesitate to ask me ;-)
