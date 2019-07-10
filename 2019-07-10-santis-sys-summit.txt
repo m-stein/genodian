@@ -1,0 +1,26 @@
+                The Säntis System Summit in Summer 2019
+
+I must admit that I more or less stumbled into this wonderful event by chance.
+Not knowing what to expect exactly from the online presentation I was totally
+overwhelmed by the positive experience in the end. Not only provided the
+location at mountain Säntis in Appenzell a breathtaking scenery and the hotel
+was great, but, most of all, amongst all organizers and participants there was
+an enthusiastic, open-minded and relaxing atmosphere that made this
+(un)conference special to me.
+
+[image 2019-07-10-santis-sys-summit-1]
+
+Also very refreshing was the concept of the conference: The organizers decided
+not to enforce a pre-defined schedule of talks and presentations but to
+encourage everyone to participate in assembling a schedule of discussion
+rounds about desired topics ad-hoc. This turned out to be, at least to me, a
+very dynamic and inspiring solution. I had some interesting discussions about
+the Genode framework, Sculpt and my recent work with Ada and SPARK but also
+about cryptographics.
+
+[image 2019-07-10-santis-sys-summit-2]
+
+On top of that, we had a fascinating trip to the windy summit of mount Säntis
+were a surprise tour through the inner workings of the Säntis transmission
+tower and weather station waited for us. I definitely hope for a successor of
+this gathering and, so far, like to thank all those guys who made this happen!
