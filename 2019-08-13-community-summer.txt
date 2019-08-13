@@ -1,0 +1,64 @@
+             Invitation to the Genode Community Summer
+
+Recently, several requests reached us at Genode Labs from people interested in
+coming to Dresden for a certain period of time to work on their Genode project
+while beeing able to seek our assistance in person.  To give this idea a
+dedicated space, Genode Labs will hold a new event, the "Genode Community
+Summer" this year.
+
+
+For whom?
+---------
+
+The gathering is open for everyone of the Genode community. Each participant
+should have a concrete project to pursue during the time and be able work on
+this project independently most of the time. Unlike a commercial offered
+workshop, there won't be any lecture or intensive coaching, but simply
+co-working in an informal and friendly setting.  During the day, people of our
+team would also work there so that participants can seek our assistance at any
+time.
+
+Please note that anything confidential should better be left at home!  This
+way, we can accommodate people with different backgrounds at the same time
+while the event bears potential for networking effects among different
+community members.
+
+
+Where?
+------
+
+The event will take place in the lower floor of the Genode Labs office,
+Friedrichstraße 26, 01067 Dresden, Germany. Note, that lodging is up to each
+participant individually.
+
+[image 2019-08-13-community-summer]
+
+
+When?
+-----
+
+Over two weeks from 16th to 27th of September 2019. It is possible to
+participate only for a part of this time.
+
+
+How to register?
+----------------
+
+Each participant must register in advance since our space is limited but the
+event will be at no cost. Please register via mail to the mailing list or
+martin.stein@genode-labs.com. We will hold the event only if at least 4 people
+register until end of August. We will inform all participants through the
+mailing list as soon as we have 4 registrations.
+
+Your registration must contain a brief description of the project you're
+planning to pursue during the gathering. Please also add whether you like to
+participate for the whole two weeks, and if not, which part of that time you
+will participate.
+
+
+
+If you have further questions regarding the Genode Community Summer, please
+don't hesitate to ask me directly via martin.stein@genode-labs.com or at the
+mailing list users@lists.genode.org.
+
+Hope to see you there!
