@@ -1,0 +1,106 @@
+        Spunky - Part 2: The Signals, The FOSDEM, and the repository
+
+In this series of articles I'll illustrate a hobby project of mine that is
+trying to create a kernel for Genode written in Ada 2012. This project is not
+about writing a kernel from scratch but rather successively take parts from the
+existing base-hw kernel and translate them to Ada. Thus, the design mainly
+follows the approach taken with base-hw. To be able to test the already
+translated parts, I link them together with the remaining parts from base-hw.
+The interfacing between the Ada and the C++ parts is done on the level of
+object methods. Over time, the code base of the new kernel will become more and
+more Ada and less C++. Maybe later this work will also lead to some formal
+verification with SPARK. But for now, I'm happy with Ada. So let's go!
+
+You can find the code behind this article on my
+[https://github.com/m-stein/genode/commits/3308_spunky_a_kernel_using_ada - Github branch].
+If you're interested in the recent state of my work, you may have a look at
+the [https://github.com/genodelabs/genode/issues/3308 - Github issue]. You
+also might want to read the former articles of this series:
+
+* [http://genodians.org/m-stein/2019-05-09-spunky-1 - Part 1: RPC].
+
+
+A thing about generics and incomplete types
+-------------------------------------------
+
+The base-hw signaling requires queues, so, I wanted to be able to re-use my
+Ada implementation of queues from the RPC module. So far, this was not done as
+Ada generic and therefore still bound to the RPC use-case. But while changing
+this, I hit a strange-looking compilation error:
+
+! run-time library configuration error
+! file s-finmas.ads had semantic errors
+! entity "System.Finalization_Masters.Finalization_Master" not available
+! run-time configuration error
+! entity "System.Soft_Links.Abort_Undefer" not defined
+
+It turned out that the Genode Ada/SPARK runtime was yet missing
+"finalization", a feature required for specializing a generic with an
+incomplete type. But there was no way around: My queued objects use the
+queue-item type as member, so, they cannot be fully declared before the
+specialization of the queue. At the other hand, implementing finalization
+seemed to be complicated as well.
+
+Fortunately, there was Johannes Kliemann who knows the Ada/SPARK runtime of
+Genode way better than me and didn't give up looking for a solution. In the
+end he found this little pragma that tells the compiler to simply skip
+finalization at all:
+
+! pragma Restrictions (No_Finalization)
+
+And indeed, this worked like a charm. Thanks again at this point to Johannes!
+Generic queues: On board.
+
+How to deal with kernel objects?
+--------------------------------
+
+In contrast to the RPC state machine, signal contexts and signal receivers are
+also managed as kernel objects referenced by capabilities in the userland.
+Therefore, they inherited this aspect. The kernel-object management, in turn,
+made use of the fact that the kernel-object aspect was always applied through
+inheritance. However, for the translation to Ada, this was impractical. I
+decided to turn the kernel-object aspect into a member of the affected classes.
+This required a broader modification of the kernel, but, at the other hand,
+also base-hw itself benefits from simpler inheritance hierarchies.
+
+The rest of the preparing modifications to base-hw were about minor things like
+avoiding non-const methods with return values, pointer arguments, and virtual
+functions.
+
+A new base-repository
+---------------------
+
+Finally, having the signaling in Ada working (no big problems here, again), I
+wanted Spunky to move to a directory it could call its home and relieve base-hw
+from all the mixed-in and premature hacks for building Spunky. In the
+beginning, I extracted a minimal set of Make files from base-hw from which I
+created a self-standing core-spunky target for the build system. Now, the Ada
+files could be moved to base-spunky. Finally, I tried to get rid of all
+remaining obstacles in base-hw that should not enter mainline. It went
+surprisingly well and base-spunky now contains a collection of only a hand full
+of files (mostly Ada). Wherever an Ada-version is still missing, files from the
+base-hw directory are incorporated. Base-hw, on the other hand is now free from
+Spunky-specific code and can be used as usual again.
+
+Some small adaptions to the Genode tooling for build directories and the
+execution of test scenarios made developing with Spunky as comfortable as with
+other kernels. You can give it a try if you like - just check out my
+[https://github.com/m-stein/genode/commits/3308_spunky_a_kernel_using_ada - topic branch (based on latest Genode mainline)],
+create a new x86_64 build directory, go to the build directory, and type:
+
+! KERNEL=spunky BOARD=pc make run/log
+
+Of course, Spunky can do a lot more: In principal, all you can do with base-hw
+on x86_64 is likewise supported by Spunky!
+
+Spunky at the FOSDEM 2020
+-------------------------
+
+I hope you enjoy my approach with Spunky and the articles about it. If you
+would like to know more about it, the FOSDEM 2020 in Brussels will be a great
+place! Spunky will have it's own talk there (presented by me) in the
+[https://people.cs.kuleuven.be/~dirk.craeynest/ada-belgium/events/20/200201-fosdem.NEW.html
+- Ada/SPARK Devroom]. Maybe we'll meet there. If not, you can also watch
+the stream of the presentation online ;)
+
+To be continued...
