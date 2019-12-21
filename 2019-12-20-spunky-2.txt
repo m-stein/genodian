@@ -1,4 +1,4 @@
-        Spunky - Part 2: The Signals, the FOSDEM, and the repository
+        Spunky - Part 2: The Signals, The FOSDEM & The Repository
 
 In this series of articles I'll illustrate a hobby project of mine that is
 trying to create a kernel for Genode written in Ada 2012. This project is not
@@ -99,8 +99,8 @@ Spunky at the FOSDEM 2020
 I hope you enjoy my approach with Spunky and the articles about it. If you
 would like to know more about it, the FOSDEM 2020 in Brussels will be a great
 place! Spunky will have it's own talk there (presented by me) in the
-[https://people.cs.kuleuven.be/~dirk.craeynest/ada-belgium/events/20/200201-fosdem.NEW.html
-- Ada/SPARK Devroom]. Maybe we'll meet there. If not, you can also watch
-the stream of the presentation online ;)
+[https://people.cs.kuleuven.be/~dirk.craeynest/ada-belgium/events/20/200201-fosdem.NEW.html - Ada/SPARK Devroom].
+Maybe we'll meet there. If not, you can also watch the stream of the
+presentation online ;)
 
 To be continued...
