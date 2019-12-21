@@ -86,7 +86,12 @@ Some small adaptions to the Genode tooling for build directories and the
 execution of test scenarios made developing with Spunky as comfortable as with
 other kernels. You can give it a try if you like - just check out my
 [https://github.com/m-stein/genode/commits/3308_spunky_a_kernel_using_ada - topic branch (based on latest Genode mainline)],
-create a new x86_64 build directory, go to the build directory, and type:
+create a new x86_64 build directory, go to the build directory, enable the
+line
+
+! REPOSITORIES += $(GENODE_DIR)/repos/libports'
+
+in 'etc/build.conf' (for the Ada run-time), and type:
 
 ! KERNEL=spunky BOARD=pc make run/log
 
