@@ -1,4 +1,4 @@
-        Spunky - Part 2: The Signals, The FOSDEM & The Repository
+       Spunky - Part 2: The Signals, The FOSDEM, and The Repository
 
 In this series of articles I'll illustrate a hobby project of mine that is
 trying to create a kernel for Genode written in Ada 2012. This project is not
