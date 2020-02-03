@@ -1,0 +1,114 @@
+      Spunky #3: Desktop system, FOSDEM video, scheduler, plans
+
+In this series of articles I'll illustrate a hobby project of mine that is
+trying to create a kernel for Genode written in Ada 2012. This project is not
+about writing a kernel from scratch but rather successively take parts from the
+existing base-hw kernel and translate them to Ada. Thus, the design mainly
+follows the approach taken with base-hw. To be able to test the already
+translated parts, I link them together with the remaining parts from base-hw.
+The interfacing between the Ada and the C++ parts is done on the level of
+object methods. Over time, the code base of the new kernel will become more and
+more Ada and less C++. Maybe later this work will also lead to some formal
+verification with SPARK. But for now, I'm happy with Ada. So let's go!
+
+You can find the code behind this article on my
+[https://github.com/m-stein/genode/commits/3308_spunky_a_kernel_using_ada - Github branch].
+If you're interested in the recent state of my work, you may have a look at
+the [https://github.com/genodelabs/genode/issues/3308 - Github issue]. You
+also might want to read the former articles of this series:
+
+* [http://genodians.org/m-stein/2019-05-09-spunky-1 - Part 1: RPC].
+* [http://genodians.org/m-stein/2019-12-20-spunky-2 - Part 2: Signals, FOSDEM, Repo].
+
+Running the Sculpt desktop OS on Spunky
+---------------------------------------
+
+Running Sculpt on the new kernel was not only a wonderful real-world test
+lurking from right behind the corner but also an absolute must-have for me! In
+the end, one main motivation for starting with Spunky, was the perspective of
+having it running underneath the system I'm working on. So, Sculpt now fluently
+runs on Spunky. At this point I'd like to thank Stefan Kalkowski for providing
+several Sculpt tweaks and Alexander Böttcher for enabling write-combining
+support in no time!
+
+Do you like to try it yourself?
+
+Get the sources:
+
+! git clone https://github.com/m-stein/genode.git
+! cd genode
+! git checkout 3308_spunky_a_kernel_using_ada
+
+Create a build directory:
+
+! ./tool/create_builddir x86_64
+! cd build/x86_64
+
+Open 'etc/build.conf' and enable all repositories, automatic package
+creation, and parallel building by uncommenting these lines:
+
+! #MAKE += -j4
+! ...
+! #RUN_OPT += --depot-auto-update
+! ...
+! #REPOSITORIES += ...
+! #REPOSITORIES += ...
+! ...
+
+Enable creation of a disk image by changing '--include image/iso' to
+'--include image/disk' in the same file. Save and close the file.
+
+Prepare required third-party sources (they will all be downloaded to
+'<YOUR_GENODE_DIR>/contrib'):
+
+! ../../tool/ports/prepare_port -j4 \
+!    ada-runtime bash coreutils curl dde_ipxe dde_linux dde_rump \
+!    e2fsprogs gnupg jitterentropy libarchive libc libgcrypt libpng \
+!    libssh ncurses openssl stb ttf-bitstream-vera vim x86emu xz zlib \
+!    grub2
+
+Start building:
+
+! KERNEL=spunky BOARD=pc make run/sculpt
+
+It may take a while. Once it finished successfully, you can write the image
+directly to a bootable USB stick:
+
+! sudo dd if=var/run/sculpt.img of=/dev/sdX bs=1M conv=fsync
+
+For information about what you can do with your freshly created Spunky Sculpt,
+please refer to the
+[https://genode.org/documentation/articles/sculpt-19-07 - Sculpt documentation]
+
+FOSDEM video
+------------
+
+I totally enjoyed the FOSDEM and I'm still happy that the Ada folks let me
+present Spunky in their Devroom. I sensed so much interest in my little
+project - that motivated me a lot, thanks! If you'd like to watch a recording
+of the presentation online, the excellent FOSDEM staff made it available to
+everyone:
+
+* [https://video.fosdem.org/2020/AW1.125/ada_spunky.mp4 - As MP4]
+* [https://video.fosdem.org/2020/AW1.125/ada_spunky.webm - As WEBM]
+
+Scheduler
+---------
+
+The CPU scheduler of Spunky now is also written in Ada. I'm getting more and
+more accustomed to the frictionlessness of integrating new packages. But the
+scheduler already is one of the most complex units of the design and it's
+especially critical to the system performance. Anyways, the new Sculpt scenario
+doesn't show any problems with the update and while I'm writing this, I'm
+already sitting at the next module - my first encounter with real low-level
+programming in Ada - the APIC timer driver.
+
+Plans
+-----
+
+By the way, Spunky has made it to the official
+[https://genode.org/about/road-map - Genode roadmap]! Until
+August this year I'm planning to make Spunky all Ada and remove all
+dependencies to base-hw code. Once this is done, I will start thinking about
+how to re-design the kernel to make it SPARK compliant. I hope that I can
+do some first basic proves (flow mode) till the end of the year.
