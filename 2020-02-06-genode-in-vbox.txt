@@ -1,0 +1,67 @@
+                      Running Genode in VirtualBox
+
+After I finished the most recent
+[http://www.genodians.org/m-stein/2020-02-03-spunky-3 - article about Spunky] I
+received feedback from people who tried to run Sculpt OS with Spunky inside a
+VirtualBox VM and met some difficulties. While trying to reproduce the
+scenario, I noticed that there seems to be not much documentation about how to
+run Genode scenarios other than the ready-to-use Virtual-Appliance image from
+the [https://genode.org/download/sculpt - Sculpt download page] in VirtualBox.
+And there are a few pitfalls.
+
+I'll show-case the procedure with the Spunky Sculpt I just created using the
+tutorial in the article I mentioned in the beginning. However, the procedure applies
+for other Genode scenarios for 64-bit x86 as well. So, let's start.
+
+My VirtualBox version is 5.2 and I'm running on an Intel Core i5 (64-bit). I'm
+in my build directory '<GENODE_DIR>/build/x86_64' and, because I was building
+with '--include image/disk' instead of the default '--include image/iso' in my
+'etc/build.conf', there's now a file 'var/run/sculpt.img' which I first want to
+write to a VirtualBox disk:
+
+! VBoxManage convertfromraw --format VMDK var/run/sculpt.img sculpt.vmdk
+
+Then I'm going to the VirtualBox GUI and start creating a new virtual machine.
+I choose a name, set the type to 'Other', and set the version to 'Other/Unknown (64-bit)'.
+In the next dialog, I assign 1024 MB of my RAM to the VM (but this
+value is flexible). In the following, I choose to use an existing  file
+as hard disk for the VM and enter the path to my 'sculpt.vmdk' file. With this,
+the creation dialog ends and I can select the new VM in the main window.
+
+But before starting it, I have to open its configuration window. In the
+category 'System' I'll change the chipset to 'ICH9' as the other one is too old
+for the Genode drivers. Also in 'System', I'll enable EFI, I/O APIC, and UTC
+for the hardware clock, and, optionally, set the mouse type to USB. Probably, I
+also want to set the number of cores for the VM under 'System -> Processor' and
+check that hardware virtualization is enabled in 'System -> Acceleration'.
+
+Now, I'll go to the category 'Network', enable adapter 1 with NAT, open the
+advanced settings of adapter 1, and set the adapter type to 'Intel PRO/1000 MT
+Desktop ...' as Genode supports Intel cards.
+
+For my Sculpt, I also want to have a second hard disk, so, next is the category
+'Storage'. I add a SATA controller here if it doens't exist already and to the
+SATA controller I add a new hard disk. This hard disk can be of any type and
+size but you may want to have it to be allocated dynamically.
+
+Now, sometimes - for whatever reasons - my scenario doesn't allow for
+inspecting the log from within the Genode system and on some kernels,
+inspecting the log of the kernel or Genodes Core from the userland isn't even
+possible. In these cases, I might want to go to the category 'Serial ports',
+enable a port, set the mode to 'Raw file', and enter a host file path
+through which I can then inspect my logs from the host system.
+
+Talking especially about Sculpt, only the log of the first static components is
+routed to the serial port at all. If you'd like to inspect, for instance, the
+log of the drivers subsystem with the above mentioned method, you have to open
+'<GENODE_DIR>/repos/gems/run/sculpt.run', find the node
+'<start name="drivers" ...>' and from it's sub-node '<route>', you have to
+remove the line '<service name="LOG"> ...'. Of course, this requires the Sculpt
+image to be re-built.
+
+Now, when starting the new VM, I can see that my Spunky Sculpt comes up just
+fine and that I can format the second hard drive, mark it as "Use", and start a
+wired connection to download and deploy packages in the Sculpt runtime. Please
+refer to the
+[https://genode.org/documentation/articles/sculpt-19-07 - Sculpt documentation]
+for this.
