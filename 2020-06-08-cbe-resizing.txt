@@ -1,0 +1,280 @@
+                   The CBE series #2 - Online resizing
+
+This series of articles describes the features and integration of the
+Consistent Block Encrypter (CBE) in detail. The CBE is a block-device
+encryption component with its core logic entirely written in SPARK. It combines
+multiple techniques to ensure confidentiality, integrity, consistency, and
+freshness of the block data efficiently. Furthermore, the whole core logic so
+far passes gnatprove in mode "flow".
+
+In case you are not familiar with the basic structure of the CBE, I'd recommend
+you this introduction before reading on:
+
+* [https://genode.org/documentation/release-notes/19.11#Preliminary_block-device_encrypter - The CBE in the Genode release notes 19.11]
+* [https://genode.org/documentation/release-notes/20.05#Feature-completeness_of_the_consistent_block_encrypter - The CBE in the Genode release notes 20.05]
+
+The other articles in this series so far:
+
+* [http://genodians.org/m-stein/2020-06-07-cbe-rekeying - Online rekeying]
+
+The source code on GitHub:
+
+* [https://github.com/m-stein/genode/tree/cbe_20.05 - Genode repositories]
+* [https://github.com/m-stein/cbe/tree/cbe_20.05 - CBE repository]
+
+Resizing - The basics
+---------------------
+
+The CBE is currently resizable in two ways. The virtual block device can
+be extended and the free tree can be extended. As both operations have a lot
+in common, I'll describe the basic idea first and will go into
+the pecularities later.
+
+Directly at the CBE interface, an extension operation is communicated like any
+other operation by submitting a request. The request has either the operation
+type "Extend Virtual Block Device" or "Extend Free Tree". The request carries
+one parameter that is the number of physical blocks that shall be added to the
+CBE. Note that the set of physical blocks that the CBE uses is always given as
+contiguous range of block addresses that starts with block address 0.  The CBE
+furthermore remembers this range in the superblock. That said, when telling the
+CBE to extend itself using N additional physical blocks and A is the highest
+physical block address currently used, the CBE will incorporate the physical
+block addresses A + 1 to A + N.
+
+As an extension operation might require the CBE to update and write many
+branches of different trees, the operation can be time intensive depending on
+the number of added physical blocks. Extension operations are therefore
+implemented in a way that doesn't block all other operations on the device. The
+CBE will continue handling "Read", "Write", "Sync", and "Discard Snapshot"
+requests during the extension process. I will refer to them as concurrent
+requests. At the other hand, "Create Snapshot", "Extend Free Tree", "Extend
+Virtual Block Device", and "Rekeying" requests cannot be executed in parallel
+to an extension operation. I will refer to these as non-concurrent requests.
+
+When submitting an extension request it will be added to the request-scheduling
+queue of the CBE. The actual execution of the request, however, doesn't start
+until all non-concurrent requests that arrived at the scheduler before the
+extension request are done. Vice versa, non-concurrent requests that arrived
+after the extension request are blocked until the latter is finished.
+
+Concurrent requests, at the other hand, are executed pseudo-parallel to an
+extension. This means that an extension is not done in one big operation. It is
+rather split up into many small atomic operations and each time one of these
+atomic operations is done, the CBE device is left in a state that allows for
+intermixing concurrent requests before the next extension step starts.
+
+This also has the benefit that there are many consistent intermediate states
+during an extension that can be secured to the physical block device and the
+trust anchor. Should the system be turned off during an extension, the progress
+isn't lost (except the last unfinished step of course) and the extension
+operation can be continued on next startup. Better said, it _has_ to be
+continued on next startup, because the virtual block device would otherwise
+remain in a state that limits the functionality of the CBE.
+
+That said, the CBE has to remember inside the superblock that an extension
+operation is pending and in which state it is. And it will automatically
+continue a pending extension operation on startup as the first request in the
+scheduling queue. Note that this is only the case for a running extension
+operation. An extension requests somewhere in the scheduling queue that is not
+yet started will be - like any other scheduled request - forgotten on system
+shutdown.
+
+There are two types of atomic extension operations: The initialization of the
+extension process and the extension of the targeted tree by a small number of
+leaf nodes using the contingent of new physical blocks. The extension of a tree
+can be implemented simply as a series of tree walks as we will see later. In
+the CBE an extension step is limited to the outcome of one tree walk. As a
+result of that, the number of leaves added during an extension step is at least
+one and no more than the trees degree (number of edges per inner node).
+
+[image cbe_resizing_schedule] Exemplary schedule during an extension operation
+
+After the initialization step, the CBE keeps doing extension steps on the
+targeted tree until the contingent of new physical blocks is depleted. At the
+end of each of these atomic extension operations, the CBE updates the
+superblock, secures the device state, and tries to prepone up to 8 concurrent
+requests before starting the next extension step.
+
+Initializing the extension process
+----------------------------------
+
+In order to initiale the extension process, the CBE first sets the superblock
+to state "Extending Virtual Block Device" or "Extending Free Tree" depending on
+the targeted tree. Furthermore, it remembers in the superblock the contingent
+of new physical superblocks that is left for the extension operation.
+Initially, this is the number of physical blocks given in the extension request
+of the user but throughout the extension process it will be decreased more and
+more.
+
+Once updating the superblock is done, the superblock and the corresponding
+state can be written out to the physical block device and secured at the trust
+anchor. This procedure looks as follows: First, the CBE issues a request at the
+trust anchor to encrypt the symmetric key using the private key of the user.
+Note that the private key of the user is known only to the trust anchor.
+
+Then, the superblock is written out to a new superblock slot on the physical
+block device which is then synchronized together with the CBE block caches.
+Finally, the trust anchor is requested to store the hash of the superblock,
+i.e., the superblock is secured. In case of a system shutdown, this will allow
+the CBE to find and verify the new superblock slot on next startup. When the
+superblock was secured successfully, the last secured generation is set to the
+current generation and the current generation is incremented by one.
+
+A tree extension step
+---------------------
+
+For doing an extension step at the targeted tree, the CBE first determines the
+identifier of the right-most complete branch in the tree. For the virtual block
+device, this is the highest virtual block address covered. For the free tree
+this is technically the same, the combination of edge indices along the way of
+the branch. But as the branches in the free tree are not related to block
+addresses, we call it branch identifier instead. The left-most branch always
+has the identifier 0, the second left-most the identifier 1, and so on.
+
+So, the identifier of the right-most branch in the tree is known. The CBE now
+wants to add a new branch to the right of the right-most branch. Consequently,
+this new branch would have the identifier X + 1, where X is the identifier of
+the right-most branch. With this identifier known, two situations must be
+distinguished. The current tree geometry - the number of tree levels and the
+number of edges per inner node - defines a maximum for the number of branches
+that the tree can contain.
+
+If the identifier of the new branch is greater or equal to this maximum, the
+current tree geometry doesn't suffice for adding another branch. In this case,
+a new root level is added atop the current root level of the tree before the
+new branch can be added. Thereby, the first edge of the new root references the
+old root while all other edges of the new root are now available for extending
+the tree. The physical block for the new root is taken from the contingent of
+the extension operation.
+
+If the identifier of the new branch, however, is less than the maximum number
+of branches that the tree can contain, the current tree geometry is sufficient
+and can therefore remain unmodified. Note that in this case, the nodes for the
+new branch already exist down to a certain tree level. We don't know down to
+which level but at least the leaf node is definitely missing.
+
+Now that we have the tree geometry right, adding the new branch is performed by
+doing a tree walk for the identifier of the branch. Whenever we find a yet
+unset edge during this tree walk, a new physical block is taken from the
+contingent to form the missing node and let the edge reference it. This also
+applies for the missing leaf node at the end of the tree walk. In the virtual
+block device, the new leaf node is marked with generation 0 to indicate that
+its data is yet uninitialized. In the free tree, the new leaf node is marked as
+not reserved with the current generation as free generation. I.e., the new leaf
+node can be allocated as soon as the next superblock securing is through.
+
+But wait. Once we are down here, we can utilize the situation better. If the
+lowest inner node of the tree walk has more unset edges, they can be used to
+add further branches with almost no effort as each of them merely misses the
+leaf. So, to say it more generally, at the end of the tree walk, we will simply
+fill up all unused edges of the lowest inner node with new leaf blocks from the
+extension contingent.
+
+At this point, all inner nodes of the tree walk are in memory. Their hashes
+need to be updated and then they can be written back to the physical block
+device. Just as after a normal write request. Of course, for those nodes of the
+tree walk that already existed and that are not yet volatile (not of the
+current generation) a copy-on-write must be done in order to update them. The
+nodes that were just added need no copy-on-write. That said, the CBE allocates
+the CoW blocks at the free tree, if it's an "Extend Virtual Block Device"
+request, or at the meta tree, if it's an "Extend Free Tree" request.  Then the
+CBE walks up again through the loaded nodes, updates the hashes of the edges,
+and does the write back.
+
+[image cbe_ft_ext] The steps of an extension operation illustrated
+
+If the targeted tree is the virtual block device and the most recent device
+state (the one on which we did the tree walk) was a read-only snapshot (i.e. no
+modifications were made at the CBE since the last securing), a new, volatile
+device state must be created in order to reference the updated tree in the
+superblock.
+
+Finally, the number of remaining physical blocks for the extension operation is
+updated in the superblock. If the number reaches 0, the CBE returns to the
+state "Normal" and the extension request is returned as successful. If there
+are still physical blocks left for the extension the superblock remains in the
+"Extend Virtual Block Device" respectively "Extend Free Tree" state. To
+complete the extension step, the updated CBE state is synchronized and secured
+as described in the previous section.
+
+Free tree extensions and the meta tree
+--------------------------------------
+
+When extending the free tree there is one thing that is missing in the above
+description of the algorithm. The meta tree, that manages the sparse blocks for
+the CoW in the free tree, must always be dimensioned according to the size of
+the free tree. It is assumed that an allocation at the meta tree for CoW in the
+free tree never fails. Adding the fact that there are never more than two
+versions of the free tree meta data, this means that the meta tree must have at
+least as many leaves as there are inner nodes in the free tree. The same as for
+the free tree meta data also applies for the meta data of the meta tree itself.
+So, to sum it up, the number of leaves in the meta tree must be at least the
+number of inner nodes in the free tree plus the number of inner nodes in the
+meta tree.
+
+That said, whenever the CBE is at the point of adding the first new inner node
+during a free tree extension step, the meta tree is extended as a prerequisite.
+This is done the following way. First, we have to know how many leaves the meta
+tree must have so that we can finish the extension step. For this, we have to
+know the total number N1 of inner nodes that the free tree will have with the
+new branch. This number can be calculated because, at this point, we already
+know how many leaves the free tree will have after the extension step. Then, we
+can determine the number N2 of inner nodes that the meta tree would have with
+N1 leaves. After that, we calculate the number N3 of inner nodes that the meta
+tree would have with N1 + N2 leaves. And so on and so on, until we reach the
+point where the assumed number of leaves in the meta tree doesn't change
+anymore. This final number of leaves is then set as goal for the meta-tree
+extension.
+
+The CBE will now check whether the meta tree already fulfills this goal or not.
+If not, it will issue one meta tree extension step, and afterwards check again.
+If the goal is still not reached, the CBE continues issuing meta tree extension
+steps until there are enough leaves. Note that all this is done as part of the
+atomic free tree extension step and no other request can be scheduled in
+between. After that, the CBE can continue with adding the new inner nodes to
+the free tree.
+
+An extension step at the meta tree is done using the same algorithm as for the
+free tree and the virtual block device. The only difference is that, for doing
+the CoW, we allocate blocks directly from the lowest inner node of the new
+meta-tree branch. This is always possible because the degree of the meta tree
+is always greater than its number of levels. Either the lowest inner node is a
+new node, then we can add new leaves as required. Or, the lowest inner node
+already existed, which leaves us with two further situations. If one of the
+leaves of the lowest inner node is already allocated, the branch needs no CoW
+anymore. Otherwise we have enough leaves to do the CoW.
+
+Depletion of the contingent of new physical blocks
+--------------------------------------------------
+
+A remaining topic is how the depletion of the contingent of new physical blocks
+is handled. The extension algorithm assumes that the contingent of new physical
+blocks can be of any size and that it will always be incorporated completely by
+the CBE.  So, the possibility of having no blocks left must be considered at
+any point in the algorithm were a block shall be taken from the contingent.
+
+Obviously, the easiest situation is that the continguent is consumed exactly
+when having filled up all edges of the lowest inner node of the extension tree
+walk in the targeted tree. Then, the extension step can be finished as
+described. The same goes for the case that we filled up some but not all of the
+edges of the lowest inner node. A future extension request will deal just fine
+with the remaining edges.
+
+More interesting is the situation that the contingent becomes empty when we
+want to add an inner node to the targeted tree. But fortunately our algorithm
+is well prepared for that. If the parent node of the missing inner node is not
+a new node, this means that the extension step has done nothing to the targeted
+tree so far. We can simply jump to the superblock handling without updating the
+targeted tree (the meta tree, however, might have changed nonetheless). If the
+parent node of the missing inner node is a new node, we have to stop and walk
+up again updating the hashes and doing the write back. The unfinished new
+branch remains in the targeted tree with its lowest inner node having all edges
+unset (if it is not a new root node). The CBE has no problem with this as it
+only translates VBAs that ar in its range. It will simply never do a tree walk
+that leads into these new inner nodes. A future extension request on this tree,
+however, expects finding a missing edge during its tree walk for the lowest
+invalid VBA. The position of this edge is not relevant.
+
+If the contingent becomes depleted during the extension of the meta tree, all
+this applies as well. The corresponding extension step at the free tree has
+done nothing to the free tree so far.
