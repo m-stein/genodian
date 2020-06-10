@@ -1,5 +1,13 @@
                    The CBE series #1 - Online rekeying
 
+This article explains in detail how online rekeying works in the Consistent
+Block Encrypter (CBE). Online rekeying means to re-encrypt a CBE block device
+completely with a new encryption key and eventually remove the old encryption
+key while the device remains accessible the whole time.
+
+The CBE series
+--------------
+
 This series of articles describes the features and integration of the
 Consistent Block Encrypter (CBE) in detail. The CBE is a block-device
 encryption component with its core logic entirely written in SPARK. It combines

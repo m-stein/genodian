@@ -1,5 +1,13 @@
                    The CBE series #2 - Online resizing
 
+This article describes in detail how online resizing is done in the Consistent
+Block Encrypter (CBE). Online resizing enables the user to re-dimension the
+block pools used in the CBE block device with the device remaining accessible
+throughout the entire process.
+
+The CBE series
+--------------
+
 This series of articles describes the features and integration of the
 Consistent Block Encrypter (CBE) in detail. The CBE is a block-device
 encryption component with its core logic entirely written in SPARK. It combines
