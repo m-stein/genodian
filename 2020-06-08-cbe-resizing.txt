@@ -23,7 +23,8 @@ you this introduction before reading on:
 
 The other articles in this series so far:
 
-* [http://genodians.org/m-stein/2020-06-07-cbe-rekeying - Online rekeying]
+* [http://genodians.org/m-stein/2020-06-07-cbe-rekeying - #1 - Online rekeying]
+* [http://genodians.org/m-stein/2020-06-12-cbe-linux-vm - #3 - A Linux VM on a CBE device]
 
 The source code on GitHub:
 

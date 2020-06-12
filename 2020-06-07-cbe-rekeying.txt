@@ -22,7 +22,8 @@ you this introduction before reading on:
 
 The other articles in this series so far:
 
-* [http://genodians.org/m-stein/2020-06-08-cbe-resizing - Online resizing]
+* [http://genodians.org/m-stein/2020-06-08-cbe-resizing - #2 - Online resizing]
+* [http://genodians.org/m-stein/2020-06-12-cbe-linux-vm - #3 - A Linux VM on a CBE device]
 
 The source code on GitHub:
 
