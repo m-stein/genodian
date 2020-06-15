@@ -418,10 +418,10 @@ Using the management shell to control the CBE
 
 With the VM in place, we might want to perform some management work. An example
 would be creating snapshots of the CBE device. With a snapshot, we would have a
-checkpoint we can revert to in the future after some catastrophe like 'rm -rf
-*' in the wrong directory has happend. Or maybe the VBD turns out to be too
-small. Then, we would like to resize it. Or imagine you want to re-encrypt the
-whole CBE device with a new key. All those tasks can be performed using the
+checkpoint we can revert to in the future after some catastrophe like
+'rm -rf *' in the wrong directory has happend. Or maybe the VBD turns out to be
+too small. Then, we would like to resize it. Or imagine you want to re-encrypt
+the whole CBE device with a new key. All those tasks can be performed using the
 'cbe shell' package. We have already used it before to create the disk image
 file. Now, we deploy it again but this time we select the following routes:
 
@@ -476,7 +476,7 @@ The actual data of the snapshot may be accessed through this file.
 
 *Extending the CBE*
 
-Now, let's extended the virtual block device of the CBE. Note that you don't
+Now, let's extend the virtual block device of the CBE. Note that you don't
 have to shut down the Linux VM for doing so. You can even continue using
 CorePlus while extending the underlying CBE device. So, first, we should check
 the size of the current state of the VBD in the CBE shell:
