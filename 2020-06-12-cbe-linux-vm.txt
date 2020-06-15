@@ -542,12 +542,12 @@ is naturally not as fast as in absence of these operations.
 Limitations
 -----------
 
-It goes without saying that the CBE is not “production-ready” and that this
-guide is solely there to give a first-look and to show the potential of the
-CBE.
+This guide served as a first look to show the potential of the CBE. Before
+advertising the CBE as production-ready we plan to refine the following
+aspects.
 
-For instance, at its core the CBE itself is designed to perform all operations
-in an asynchronous and parallel way. This provides the necessary throughput and
+At its core, the CBE itself is designed to perform all operations in an
+asynchronous and parallel way. This provides the necessary throughput and
 responsiveness needed later on when used on a daily basis. However, for the
 time being and particular in this demo, it is deliberately operated with
 “applied parking brake” to ease further developments. That means all requests
