@@ -200,7 +200,7 @@ state, let's check it. We can deploy the 'cbe_check' component for this by
 selecting _+ → Depot → cnuke → CBE → cbe check → Install_ and setting this
 route again:
 
-* Block device → cbe block
+* File system (cbe fs) → cbe fs
 
 The CBE-check tool will check the hashes of all data and meta data blocks in
 the CBE device. After some time, there should be the following message in your
