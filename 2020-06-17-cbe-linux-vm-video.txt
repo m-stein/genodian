@@ -1,0 +1,42 @@
+
+               The CBE series #4 - Video "A Linux VM on a CBE device"
+
+There is now an online video of the tutorial
+[http://genodians.org/m-stein/2020-06-12-cbe-linux-vm - "The CBE series #3 - A Linux VM on a CBE device"]
+available on
+[https://www.youtube.com/watch?v=-UDo7sf-14E - Youtube]. It goes through the
+whole tutorial starting with a fresh Sculpt 20.02 installation until the
+rekeying of the CBE device while rebooting the Linux VM on top of it.
+
+
+The CBE series
+--------------
+
+This series of articles describes the features and integration of the
+Consistent Block Encrypter (CBE) in detail. The CBE is a block-device
+encryption component with its core logic entirely written in SPARK. It combines
+multiple techniques to ensure confidentiality, integrity, consistency, and
+freshness of the block data efficiently. Furthermore, the whole core logic so
+far passes gnatprove in mode "flow".
+
+In case you are not familiar with the basic structure of the CBE, I'd recommend
+you this introduction before reading on:
+
+* [https://genode.org/documentation/release-notes/19.11#Preliminary_block-device_encrypter - The CBE in the Genode release notes 19.11]
+* [https://genode.org/documentation/release-notes/20.05#Feature-completeness_of_the_consistent_block_encrypter - The CBE in the Genode release notes 20.05]
+
+The other articles in this series so far:
+
+* [http://genodians.org/m-stein/2020-06-07-cbe-rekeying - #1 - Online rekeying]
+* [http://genodians.org/m-stein/2020-06-08-cbe-resizing - #2 - Online resizing]
+* [http://genodians.org/m-stein/2020-06-12-cbe-linux-vm - #3 - A Linux VM on a CBE device]
+
+The source code on GitHub:
+
+* [https://github.com/m-stein/genode/tree/cbe_20.05 - Genode repositories]
+* [https://github.com/m-stein/cbe/tree/cbe_20.05 - CBE repository]
+
+Note that the above branches are not the ones used for the packages in this
+tutorial. They mark the CBE mainline based on most recent Genode 20.05 while
+the packages in this tutorial had to be built for Genode 20.02 to be compatible
+with the most recent Sculpt version.
