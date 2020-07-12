@@ -1,0 +1,11 @@
+                        Genode Community Summer 2020
+
+The Genode Community Summer will take place again this year in the lower floor
+of the Genode Labs office from 31.8.2020 till 11.9.2020. The gathering is meant
+for people who like to work on their Genode project while beeing able to seek
+the assistance of other Genode enthusiasts and the guys of Genode Labs in
+person.
+
+For further information please see the dedicated
+[https://github.com/genodelabs/genode/issues/3818 - Github issue]
+that we've just created.
