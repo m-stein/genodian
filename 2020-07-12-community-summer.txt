@@ -1,5 +1,9 @@
                         Genode Community Summer 2020
 
+_Update: Due to the uncertain situation with the Corona virus and the low_
+_number of participation requests so far, the Genode Community Summmer 2020_
+_will not take place!_
+
 The Genode Community Summer will take place again this year in the lower floor
 of the Genode Labs office from 31.8.2020 till 11.9.2020. The gathering is meant
 for people who like to work on their Genode project while beeing able to seek
