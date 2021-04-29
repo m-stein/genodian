@@ -1,0 +1,76 @@
+                   USB stick passthrough in Sculpt 21.03
+
+Recently, I wanted to use an USB stick in my Linux VM in Sculpt 21.03 and I
+couldn't figure out anymore how to do it. I was surprised that I struggled to
+find information on this topic and so I wrote this short tutorial in order to
+make it easier for others.
+
+In Sculpt, you can show a list of detected USB devices in the Leitzentrale
+Component view - the first one you are presented with when starting the system
+that shows the running programs in a graph. In this graph, click on the
+"ram_fs" node and then on the "Inspect" button that just showed up. This will
+add another button "Inspect" in the center of the top of the screen.
+
+Clicking on this new "Inspect" button at the top will toggle the Leitzentrale
+to a terminal prompt:
+
+! inspect:/>
+
+In this prompt, open the file _reports/drivers/usb_devices_ by typing:
+
+! vim reports/drivers/usb_devices
+
+A list in form of XML _<device>_ tags, one per detected USB device, shows up.
+Now, take a short look at the beginning of the list, insert your USB stick,
+close vim ({Esc}:q{Enter}) and open the file again. The first _<device>_ tag
+should have changed - this is your USB stick:
+
+! <devices>
+!    <device label="..." ...>
+!       <interface class="..."/>
+!    </device>
+!    ...
+! <devices>
+
+Now, open the file _config/launcher/usb_devices_rom_ in the same vim instance
+({Ctrl+w}{Ctrl+n}{Esc}:e config/launcher/usb_devices_rom{Enter}). This is the
+configuration of the program that controls which USB devices will be known to
+your virtual machine. You have to copy the whole _<device>_ tag of your USB
+stick from the _usb_devices_ file to the _<inline>_ tag in the
+_usb_devices_rom_ file:
+
+! <launcher ...>
+!    <config>
+!       <output ...>
+!          <inline>
+!             <device label="..." ...>
+!                <interface class="..."/>
+!             </device>
+!          </inline>
+!       </output>
+!    </config>
+! </launcher>
+
+Therefore, in vim, first go to the former file ({Ctrl+w}{Down}), navigate to
+the last character of _</device>_, start a selection ({Esc}v), navigate
+to the first character of _<device>_ and copy the selection (y), go to the
+second file ({Ctrl+w}{Up}), navigate to the last character of _<inline>_, add
+a new line ({Esc}o) and paste the copied text ({Esc}p). Finally, safe the file
+and quit vim ({Esc}:wqa{Enter}).
+
+You can now go back to the "Components" view of the Leitzentrale, start an
+instance of _usb_devices_rom_ (directly in the "+" menu) and your Virtualbox 5
+VM as usual. Take care to route the ROM session "usb devices" required by the
+VM to _usb_devices_rom_.
+
+By the way, you can do all this as well while the VM and _usb_devices_rom_ are
+already running. The programs will react to the change without the need to
+restart them. So, you can plug in and out USB sticks through the file
+_config/launcher/usb_devices_rom_ at any time.
+
+One last advice: You cannot inspect a USB stick in the Leitzentrale while
+having it passed-through to a VM! Clicking the "Inspect" button in the "USB"
+dialog in the "Component" view while using passthrough will render your
+"Inspect" view unresponsive.  However, if this occured to you for any reason,
+you can reset the "Inspect" view by subsequently clicking the "Inspect" button
+in the dialog of another storage device.
