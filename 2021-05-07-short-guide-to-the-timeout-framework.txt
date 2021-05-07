@@ -1,0 +1,131 @@
+                   A short guide to the Timeout framework
+
+Last week, a colleage of mine asked me on how to use the native interface for
+userland timing in Genode, the Timeout framework. So, I thought it would be
+worth sharing this knowledge in form of a short article.
+
+
+When to use the Timeout framework?
+----------------------------------
+
+The Timeout framework is the way to go whenever you want up to
+microseconds-accurate timeouts in the context of a native Genode application.
+If you are, however, in one of Genodes foreign runtimes like LibC or POSIX,
+you should use their timing interfaces instead. In the rare case that your
+context would render the use of non-blocking timeouts ad absordum, you want to
+use the Timer session interface instead of the Timeout framework. The Timeout
+framework is not designed to be used for blocking timeouts. I will add a
+follow-up article about the Timer session interface soon.
+
+
+How to use the Timeout framework
+--------------------------------
+
+First, include the following header in your code:
+
+! #include <timer_session/connection>
+
+It is part of Genodes 'base' library.
+Then, create a Timer connection object:
+
+! Timer::Connection timer { env };
+
+Where 'env' is the 'Genode::Environment' object that you received through the
+'Component::construct' entry of your program. If you just want to know the
+local time (the age of the timer connection you just created), do the
+following:
+
+! Genode::Duration time { timer.curr_time() };
+! Genode::Milliseconds time_ms { timer.trunc_to_plain_us() };
+! Genode::Microseconds time_us { timer.trunc_to_plain_ms() };
+
+It's fine to call the 'curr_time' method from this example very often. The
+time it returns is locally interpolated, i.e. the call doesn't imply any RPC
+and is therefore considered to be cheap. The time you receive through this
+method should normally be microseconds-accurate. However, be aware that some
+platforms don't allow for the framework to achieve microseconds-accuracy.
+
+In order to program a timeout, you first have to create a handler that can be
+called when the timeout triggers:
+
+! struct Struct_1 {
+!
+!    void handler(Genode::Duration curr_time) { ... }
+! };
+!
+! Struct_1 obj { };
+
+You can now create a timeout that triggers once, for instance, after 500
+microseconds:
+
+! Timer::One_shot_timeout<Struct_1> timeout {
+!     timer, obj, &Struct_1::handler };
+!
+! timeout.schedule(Microseconds { 500 });
+
+Destructing the timeout while it's running will stop it, i.e., it won't trigger
+anymore if it didn't already. But you can also stop a one-shot timeout without
+destructing it:
+
+! timeout.schedule(Microseconds { 700000 });
+! timeout.discard();
+
+The handler won't be called after that. If you call 'schedule' on the timeout
+again at any time (also while it's still running), the timeout will be
+re-started with the new duration. You can even re-start the timeout inside its
+own handler:
+
+! struct Struct_1 {
+!    ...
+!    Timer::One_shot_timeout<Struct_1> timeout { ... };
+!
+!    Struct_1() {
+!        timeout.schedule(Microseconds { 2000000 });
+!    }
+!
+!    void handler(Genode::Duration curr_time) {
+!        ...
+!        timeout.schedule(Microseconds { 1000000 });
+!    }
+! };
+
+This handler would be called once after 2 seconds and then periodically every
+second. For periodic timeouts, you can also use a shortcut:
+
+! Timer::Periodic_timeout<Struct_1> timeout {
+!
+!     timer, obj, &Struct_1::handler, Microseconds { 5000 } }
+
+This will trigger the handler once immediately, and then periodically every 5
+milliseconds. Such a periodic timeout can only be stopped again by destructing
+it. There is no 'discard' and no 'schedule' method as with the one-shot
+timeout. So, if you want to re-use a periodic timeout, you might find Genodes
+'Constructible' utility handy:
+
+! Constructible<Timer::Periodic_timeout<Struct_1> > timeout { };
+!
+! timeout.construct( timer, obj, &Struct_1::handler, Microseconds { 500 });
+! ...
+! timeout.destruct();
+! ...
+! timeout.construct(
+!    timer, obj, &Struct_1::handler, Microseconds { 2300 });
+
+In this example, the 'construct' call does the same as the 'schedule' call on
+a one-shot timeout and the 'destruct' call the same as the 'discard' call on a
+one-shot timeout.
+
+Note that you can create any number of timeout objects of both timeout types
+with only one Timer connection. Just give them all the same connection when
+constructing them and the framework will do the multiplexing. It's also fine
+to use the same handler on different timeouts:
+
+! using namespace Timer;
+! One_shot_timeout<Struct_1> timeout_1 { timer, obj_1, &Struct_1::handler };
+! Periodic_timeout<Struct_2> timeout_2 { timer, obj_2, &Struct_2::handler, Microseconds { 1000 }};
+! One_shot_timeout<Struct_2> timeout_3 { timer, obj_2, &Struct_2::handler };
+
+Furthermore, you should be aware that the timeout framework always calls your
+handlers with the the same thread that called the 'Component::construct'
+function of your application. However, you can safely construct, destruct,
+schedule, and discard timeouts from other threads.
