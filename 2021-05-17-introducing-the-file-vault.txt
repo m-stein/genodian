@@ -6,6 +6,8 @@ of the vault was just published for Sculpt 21.03b in my depot
 'mstein -> Tools -> file vault'. Therefore, I'll give a short overview of
 the program.
 
+_Edit 2021-05-18 by Martin Stein: Add passage about client system-shell._
+
 First of all, please keep in mind that the File Vault, so far, has not been
 used in a long-term in real-life scenarios. Actually, this is what the current
 version is all about. Therefore, you should refrain from storing critical data
@@ -86,11 +88,20 @@ requires some metadata. When all your parameters are fine, a click to the
 Start button or simply pressing Enter will start the process of creating a new
 vault. After a short while, the main controls pop up.
 
-Let's have a look at the main-controls dialog. The Shutdown button at the
-bottom will synchronize all cached vault state and then close the application.
-When closing the application without using this button, you might loose some of
-the data that you wrote most recently to the client file system. The integrity
-of the vault, however, would not be affected.
+This is the moment where you can start using your vault by connecting
+file-system clients to it. In order to see how it works, you can simply use
+the "Tools -> system shell" package from the 'genodelabs' or 'mstein' depot.
+Just connect the requirement "File system (target)" of the package to
+"file vault". The component should show up in form of a bash-prompt window.
+Your vault is mounted to '/rw' in this bash and you can now go on creating and
+modifying files in this directory. As soon as you close system shell and file
+vault, these will be inaccesible for others.
+
+Let's have a look at the main-controls dialog of the file vault again. The
+Shutdown button at the bottom will synchronize all cached vault state and then
+close the application.  When closing the application without using this button,
+you might loose some of the data that you wrote most recently to the client
+file system. The integrity of the vault, however, would not be affected.
 
 Above the Shutdown button, some live status information is shown. The overall
 size of the vault image in the Data file system, The size of the file system
