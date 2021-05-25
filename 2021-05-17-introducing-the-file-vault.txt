@@ -70,6 +70,8 @@ store the Trust Anchor and the vault data in different directories without much
 effort from our side. Later on, you might want to use other file-system
 back-ends of course.
 
+[image 2021-05-17-introducing-the-file-vault-1]
+
 Furthermore, we'll need a font server. I'd suggest you to start
 'GUI -> fonts fs' from the 'genodelabs' or 'mstein' depot. A GUI server is
 also required. You can use the 'GUI -> themed wm' package from the above
@@ -88,6 +90,8 @@ requires some metadata. When all your parameters are fine, a click to the
 Start button or simply pressing Enter will start the process of creating a new
 vault. After a short while, the main controls pop up.
 
+[image 2021-05-17-introducing-the-file-vault-2]
+
 This is the moment where you can start using your vault by connecting
 file-system clients to it. In order to see how it works, you can simply use
 the "Tools -> system shell" package from the 'genodelabs' or 'mstein' depot.
@@ -102,6 +106,8 @@ Shutdown button at the bottom will synchronize all cached vault state and then
 close the application.  When closing the application without using this button,
 you might loose some of the data that you wrote most recently to the client
 file system. The integrity of the vault, however, would not be affected.
+
+[image 2021-05-17-introducing-the-file-vault-3]
 
 Above the Shutdown button, some live status information is shown. The overall
 size of the vault image in the Data file system, The size of the file system
@@ -119,6 +125,8 @@ system for its client FS which can't be expanded on-line. When the Start button
 shows up inside the "Expand Client FS" dialog, you can again click it or simply
 press Enter to start the operation
 
+[image 2021-05-17-introducing-the-file-vault-4]
+
 This also applies for the dialog "Expand Journalling Buffer". But here you
 expand the buffer that the vault keeps for doing the Copy-On-Write on the
 virtual block device. In contrast to expanding the client FS, this operation
@@ -131,6 +139,8 @@ replace the block encryption key that is stored encrypted inside the vault
 image with a new pseudo-randomly generated one. This can be done on-line again.
 But be aware that it might require some time depending on the size of your
 vault as the whole vault has to be re-encrypted.
+
+[image 2021-05-17-introducing-the-file-vault-5]
 
 Now, if you shut down your vault and re-start it on the same Data /
 Trust-Anchor file-systems, it will detect the existing vault and, consequently,
