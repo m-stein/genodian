@@ -9,10 +9,10 @@ When to use the Timeout framework?
 ----------------------------------
 
 The Timeout framework is the way to go whenever you want up to
-microseconds-accurate timeouts in the context of a native Genode application.
+microseconds-accurate timing in the context of a native Genode application.
 If you are, however, in one of Genodes foreign runtimes like LibC or POSIX,
 you should use their timing interfaces instead. In the rare case that your
-context would render the use of non-blocking timeouts ad absordum, you want to
+context would render the use of non-blocking timeouts ad absurdum, you want to
 use the Timer session interface instead of the Timeout framework. The Timeout
 framework is not designed to be used for blocking timeouts. I will add a
 follow-up article about the Timer session interface soon.

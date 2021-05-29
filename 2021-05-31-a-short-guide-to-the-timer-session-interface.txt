@@ -1,0 +1,107 @@
+              A short guide to the Timer Session interface
+
+In my last article about timing, I presented the Timeout framework - the most
+preferable solution when you want to do timing in native Genode applications.
+However, I also pointed out that the Timeout framework isn't always the best
+solution and promised to explain in detail when and how to fall back to the
+Timer session in this case. That's what this article is about.
+
+When to use the Timer Session interface
+---------------------------------------
+
+In the previous article, I stated that you should fall back to the Timer
+Session interface only in the rare case that your context would render the use
+of non-blocking timeouts ad absurdum. What does that mean? Let's say you're
+programming a device driver and are about to initialize the device. In order to
+do so you have to wait for some milliseconds at a specific point in execution
+because your device requires it.
+
+Now, such an initialization is usually done only once in the lifetime of the
+driver, and it's a linear process without the need for good responsiveness to
+other events. Fragmenting the execution flow at this point only to accommodate
+the non-blocking nature of the Timeout framework would be artificial and so,
+the benefits of a simple 'msleep' call prevail.
+
+Another situation would be when working with a good amount of legacy code whose
+fundamental design decisions largely contradict the introduction of
+non-blocking timeout handling. However, you might want to add only a small
+feature to this code base without changing the whole design and therefore,
+again, you have to adapt and use blocking timeouts.
+
+How to use the Timer Session interface
+--------------------------------------
+
+The timer connection combines both interfaces, that of the Timeout framework
+and that of the timer session. So, again, you have to include its header
+and create an object with the Genode environment as argument:
+
+! #include <timer_session/connection>
+! ...
+! Timer::Connection timer { env };
+
+Now you have to be careful to use only the timer session interface on this
+connection. This is because, the connection allows for using this (older and
+more raw) interface only as long as you don't use the connection for any
+timeout-framework stuff. A call to a timeout-framework-specific functionality
+would switch the connection to the other mode in which it would stay for the
+rest of its lifetime. A subsequent call to a timer-session specific
+method on the object would cause an exception of type
+'Method_cannot_be_used_in_timeout_framework_mode'.
+
+So, let's have a look at the timer session interface. You can determine the
+age of the session with the following two methods:
+
+! Genode::uint64_t age_in_ms { timer.elapsed_ms() };
+! Genode::uint64_t age_in_us { timer.elapsed_us() };
+
+This looks quite similar to how you would do it with the timeout framework
+('timer.curr_time()'), however, the time value you receive here isn't
+interpolated locally. It's always requested via RPC from the timer driver and,
+due to this, 'elapsed_ms' and 'elapsed_us' are considered to be more
+time-consuming and less accurate (in the range of milliseconds).
+
+Then, you can issue blocking timeouts through the following methods:
+
+! timer.usleep(1000000);
+! Genode::log("one second later");
+! timer.msleep(1000);
+! Genode::log("two seconds later");
+
+And finally, for completeness, you could also have non-blocking timeouts with
+the timer session. For this, you will first need to set up a custom handler
+object, connect it with a signal handler, and install the signal handler at
+the timer:
+
+! struct Handler
+! {
+!   void handle() { Genode::log("Timeout triggered!"); }
+! };
+! Handler handler { };
+! ...
+! Genode::Signal_handler<Handler> signal_handler
+! {
+!   entrypoint, handler, &Handler::handle
+! };
+! timer.sigh(signal_handler);
+
+Note that 'entrypoint' is the thread that you want to have your handler called
+with. You can use the main entrypoint of your component ('env.ep()') or your
+very own entrypoint as well. Furthermore, the signal handler can also be a
+member of the 'Handler' class or even a base class.
+
+Now, you can install the timeout at the timer object:
+
+! timer.trigger_once(1000000);
+
+The duration of the timeout is given in microseconds, so, this would trigger
+after one second. It would also only trigger once. But you can set a periodic
+timeout as well:
+
+! timer.trigger_periodic(1000000);
+
+An important difference to the timeout framework is, that you can always only
+have one timeout installed at a time per timer-connection object. You should
+also refrain from installing a non-blocking timeout while another thread is in
+a blocking timeout at the same timer connection. However, it's perfectly fine
+to open multiple timer connections, depending on how many timeouts you want to
+have in parallel.
