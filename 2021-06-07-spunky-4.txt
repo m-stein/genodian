@@ -1,0 +1,110 @@
+                        Spunky #4: Kernel Timing
+
+In this article series I illustrate the development of an Ada kernel for Genode
+named Spunky. The approach is to first successively translate parts from the
+C++ base-hw kernel and temporarily integrate them with the remaining C++ parts.
+Once, the whole Kernel made it to Ada, Spunky can be further developed
+independently to benefit from the characteristics of Ada or even SPARK. This
+time, I talk about the translation of timeout scheduling and the underlying
+timer driver.
+
+You can find the code behind this article on my
+[https://github.com/m-stein/genode/commits/3308_spunky_a_kernel_using_ada_article_4 - Github branch].
+If you're interested in the discussion around Spunky, you may have a look at
+the
+[https://github.com/genodelabs/genode/issues/3308 - Github issue].
+You also might want to read the former articles of this series:
+
+* [http://genodians.org/m-stein/2019-05-09-spunky-1 - Part 1: RPC].
+* [http://genodians.org/m-stein/2019-12-20-spunky-2 - Part 2: Signalling].
+* [http://genodians.org/m-stein/2020-02-03-spunky-3 - Part 3: CPU scheduler & desktop system].
+
+Translating kernel timing to Ada
+--------------------------------
+
+The kernel timing in base-hw consists of two parts. The device-specific timer
+driver implementation with a generic interface and the generic timer that is
+the only user of the timer driver. The timer driver defines the timer IRQ,
+how to set a single one-shot timeout, how to convert between the timer counter
+and real time, and how to read an (abstract) timer counter value. With this as
+back end, the generic timer implements the always increasing wall clock time of
+the kernel and the scheduling of multiple timeouts on a single time source.
+The kernel itself programs a timeout for the CPU scheduling and each userland
+thread is allowed to have one timeout at a time as well.
+
+As with other modules, I first tried to simplify translation by adapting the
+base-hw C++ code. I got rid of inheritance (we want to reduce inheritance
+anyway in base-hw) and took care that only 'const' methods have a return value.
+With this state properly tested, I started translation.
+
+While the generic timer already felt like "business as usual" the timer driver
+was a new experience to me as I never had programmed direct interaction with
+hardware in Ada before. Quickly, I realized that I needed more lecture on this
+topic. It took me a while to dive into Ada's concept of representation clauses
+and pragmas when it comes to device IO. Eventually, however, I managed to make
+it work.
+
+But, admittedly, I'm still not very satisfied with the code. And the main
+reason is, that it is complicated to a level where I become unsure about its
+semantics. Normally, I like the way in which Ada forces me to organize my
+code in order to not skip the details of a problem out of laziness or
+false aesthetics. However, this time, I had the feeling that the problem was
+more simple than its solution. Surely enough, this has something to do with my
+lack of experience with the language. I might not be aware of certain features
+or a way of using the ones I know that would simplify my driver code. If you'd
+like to give me a hint on this, I'd be more than happy to read from you!
+(martin.stein@genode-labs.com)
+
+Now, let's get more concrete on what I'm talking about:
+
+*Accessing components of atomic registers*
+
+I use record types for MMIO registers and declare them 'atomic' so access
+doesn't get reordered or modified. The record components declare the structure
+of the register at bit granularity. However, if I want to read such a bit-field
+directly (e.g. 'if Reg.Bitfield_1 = 0 then ... end if;'), the compiler
+complains about an "access to non-atomic component of atomic record". If I try
+to declare the bit-field atomic as well, the compiler wants it to fulfill a
+specific alignment which conflicts with the register structure.
+
+Therefore, I fall back to declaring a stack variable, read the whole register
+first and then read the bit-field from the stack. It would be nice to have the
+compiler do this tedious work for me, given that the it has to be capable of
+this kind of bit-logic anyway.
+
+*Converting between register records and plane integers*
+
+Sometimes, I would like to be able to convert between the instance of a
+register record and a plane integer value of the same architectural
+representation. For instance, when the register layout is known statically, but
+the register address must be determined dynamically or when one register
+address is used with different register layouts. So far, I found no other way
+than meticulously converting, shifting and masking each bitfield by hand,
+individually for each type of register record.
+
+Of course, unchecked conversions would be another solution, but AFAIK, I would
+have to sacrifice type safety while actually there is no need to do without it.
+Again I wonder whether the compiler couldn't take over this task as it received
+the exact layout for both, the plane integer and the register record from me.
+
+*Redundancy when declaring memory layouts*
+
+If I want to configure the memory layout of a record that represents an
+MMIO register, the size of the record description more than doubles. The record
+name has to be re-written a second and a third time for the two lines that
+declare the bit-size and the atomicity of the record. Then a forth time
+together with all record-component names in order to declare the bit-offset and
+bit-size of the record components. This bloats up the description of a typical
+MMIO region with several registers and lots of bit-fields.
+
+It would be a relief, if I could write these most essential parameters of
+device IO inline with the initial type declarations. I must admit that I cannot
+see the benefit of having these declarations in separate directives.
+
+Now, please don't take this as a list of complaints - I appreciate programming
+Ada. It's only what I sensed a burden when first diving into driver development
+with the language and I wanted to document my impression. Maybe I can even
+learn how to overcome these problems with the existing language features.
+
+I'm currently sitting at the next kernel driver, the interrupt controller, and
+I hope that soon, I can add another part to this article series.
