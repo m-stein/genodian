@@ -23,7 +23,7 @@ How to use the Timeout framework
 
 First, include the following header in your code:
 
-! #include <timer_session/connection>
+! #include <timer_session/connection.h>
 
 It is part of Genodes 'base' library.
 Then, create a Timer connection object:
