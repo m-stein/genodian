@@ -1,0 +1,359 @@
+                        Genodes VFS #1: The basics
+
+Over the last years the Virtual File System (VFS) has played an ever more
+important role in Genode-based systems. Its applications cover not only access
+to conventional file systems but also font servers, network stacks,
+cryptographic devices, debugging facilities, and more. Yet documentation about
+the VFS is quite scattered and context-specific. In this article series I'd
+like to gather simple examples that explain how to use most of the plugins and
+utilities around Genodes VFS.
+
+This article series is accompanied by a
+[https://github.com/m-stein/genode/tree/vfs_articles - Github branch] that
+contains several Genode scenarios for you to play around with. The scenarios
+are named 'repos/gems/run/vfs_example_x.run' where x is the example number. I
+will refer to them as "example x" in the articles. If you don't know how to
+run Genode scenarios, please see the
+[https://genode.org/documentation/genode-foundations/21.05/getting_started/index.html - Genode Foundations book]
+first.
+
+Static content with the <dir> and <inline> file systems
+-------------------------------------------------------
+
+Let's start with a very basic example that demonstrates some fundamental
+aspects of the Genode VFS. Unlike with most unix-based systems, file systems in
+Genode are component-local. That means, each program that uses the VFS has its
+own root directory that spans its very individual structure of directories and
+files. In order to equip an application with its own VFS and root directory,
+two things are needed: First, I'll have to link the VFS library against my
+program by adding it to the 'target.mk' file:
+
+! TARGET  := my_program
+! SRC_CC  := main.cc
+! LIBS    += base vfs
+
+With that, I can trigger the creation of the VFS environment in this program by
+adding the '<vfs>' node to the programs configuration:
+
+! <start name="my_program">
+!   <resource name="RAM" quantum="1M"/>
+!   <config>
+!     <vfs/>
+!   </config>
+! </start>
+
+Note that, at first sight, this doesn't change much for the application though.
+If I'm using the native Genode runtime (the 'base' library), I'm still in that
+runtime, if libc or POSIX, I'm still in libC or POSIX. The only difference is,
+that the VFS root directory is now accessible in addition to my common runtime.
+
+In order to demonstrate this, let's replace my imaginary program with the
+FS-query tool ('repos/gems/src/app/fs_query'). The FS-query tool is a small
+native Genode component that can report the content of directories and files of
+its local VFS. Example 1 on my Github branch is a scenario where FS query is
+told to report the contents of the local root directory:
+
+! <config>
+!   <vfs/>
+!   <query path="/"/>
+! </config>
+
+Running the scenario, the FS-query report confirms that the directory is
+available and empty:
+
+! <dir path="/"/>
+
+Now, let's say I merely want to add a static text file to this directory. This
+is addressed by the <inline> file system (example 2):
+
+! <config>
+!   <vfs>
+!     <inline name="x">Some file content!</inline>
+!   </vfs>
+!   <query path="/" content="yes" size="yes"/>
+! </config>
+
+I set the file name through the 'name' attribute and, inside the node, I
+specified the static content of the file. You may have noticed that I also
+changed the query command. With the 'content' and 'size' attributes set, FS
+query will not only list files found at the requested path but also try to
+print their content and size. Consequently, the output of example 2 looks as
+follows:
+
+! <dir path="/">
+!   <file name="x">Some file content!</file>
+! </dir>
+
+Next, I want to add a sub-directory by using the <dir> file system:
+
+! <vfs>
+!   <inline name="x">Some file content!</inline>
+!   <dir name="y"/>
+! </vfs>
+
+Running the scenario again, I can see my new directory listed:
+
+! <dir path="/">
+!   <dir name="y"/>
+!   <file name="x" size="18">Some file content!</file>
+! </dir>
+
+Change also the query path to '/y', FS query reports that 'y' is still empty:
+
+! <dir path="/y"/>
+
+I can combine <inline> and <dir> file systems to create an individual static
+file system for my component (example 3):
+
+! <vfs>
+!   <inline name="README">Mail me for the README!</inline>
+!   <inline name="VERSION">2.16</inline>
+!   <dir name="config">
+!     <inline name="verbose">yes</inline>
+!     <dir name="tcp_ports"/>
+!     <dir name="udp_ports">
+!       <inline name="69"><forward to="10.0.0.1"/></inline>
+!     </dir>
+!     <inline name="dns_servers"/>
+!   </dir>
+! </vfs>
+
+And, as also demonstrated by example 3, I can set a list of multiple query
+commands for FS query and they will be concatenated into a single report:
+
+! <dir path="/">
+!   <dir name="config"/>
+!   <file name="README" size="23">Mail me for the README!</file>
+!   <file name="VERSION" size="4">2.16</file>
+! </dir>
+! <dir path="/config">
+!   <dir name="tcp_ports"/>
+!   <dir name="udp_ports"/>
+!   <file name="dns_servers" size="0"/>
+!   <file name="verbose" size="3">yes</file>
+! </dir>
+! <dir path="/config/udp_ports">
+!   <file name="69" size="24" xml="yes"><forward to="10.0.0.1"/></file>
+! </dir>
+
+Accessing a VFS from a POSIX/libc runtime
+-----------------------------------------
+
+Although you can access a VFS also from Genodes native runtime, I'd like to
+start with the POSIX/libc runtime. I think that for developers accustomed to
+unix-based systems this is the easier way to get their hands on it and it is
+valuable knowledge anyway considering the importance of ported software for
+Genode.
+
+In example 4, I integrate a small program that I equipped with the POSIX/libc
+runtime and the VFS by adding the corresponding libraries to its makefile
+(repos/gems/src/app/vfs_example_4/target.mk):
+
+! LIBS = posix vfs
+
+I can configure the VFS just the same way as I did with the FS-query tool. But
+There is something new. The <log/> file-system plugin adds a single file named
+'log' that forwards everything written to it to the Log session of the program:
+
+! <dir name="dev"> <log/> </dir>
+
+As I placed it into a sub-direcory, the file will appear as '/dev/log' to the
+rest of the program. Now I can use this file to equip the POSIX/libc
+environment with a standard output:
+
+! <libc stdout="/dev/log"/>
+
+This is necessary as otherwise, calling printf from inside the POSIX program
+in order to generate serial output would be in vane (and I don't want
+to directly call Genodes native Log session from inside a POSIX program but
+rather stay with POSIX-native tools).
+
+The program code is quite simple. As I linked the POSIX library, the program
+entry isn't 'Component::construct' as with native Genode components but 'main'.
+Furthermore, I can include typical headers like 'stdio.h' or 'unistd.h'. The
+program first reads the content of the VFS file '/friendly/greetings' ...
+
+! int fd = open("/friendly/greetings", O_RDWR);
+! int count = read(fd, buf, sizeof(buf) - 1);
+
+... and prints it to the standard output demonstrating that the implicit
+combination of VFS and POSIX/libc runtime worked:
+
+! [init -> vfs_example_4] Read 12 bytes: Hello world!
+
+However, eventually, the program tries to write back the buffer to the very
+same file...
+
+! int err = write(fd, buf, sizeof(buf) - 1);
+
+... and fails:
+
+! [init -> vfs_example_4] Write returned -1
+
+This shows that the <inline> files are just static content that cannot be
+changed at runtime.
+
+Local writable files with the <ram> file system
+-----------------------------------------------
+
+If I want local writable files in the VFS, I can use the <ram> file-system
+plugin ('repos/os/src/lib/vfs/ram_file_system') instead. This plugin allows me
+to mount a dynamic in-memory file system at any point in my VFS:
+
+! <vfs>
+!   <dir name="my_notes"> <ram/> </dir>
+!   ...
+! </vfs>
+
+This is exactly what example 5 does. In this scenario the POSIX program is able
+to create a file inside '/my_notes' and write a string to it:
+
+! int fd = open("/my_notes/entry_1", O_RDWR | O_CREAT);
+! int err = write(fd, str, strlen(str));
+
+Afterwards, it seeks back to the beginning of the file, reads the whole file
+content, then overwrites the file partially and reads the file content again:
+
+! lseek(fd, 0, SEEK_SET);
+! int count = read(fd, buf, sizeof(buf) - 1);
+! ...
+! lseek(fd, 7, SEEK_SET);
+! ret = write(fd, str_2, strlen(str_2));
+! ...
+! lseek(fd, 0, SEEK_SET);
+! ret = read(fd, buf, sizeof(buf) - 1);
+
+As expected, the file content changes:
+
+! [init -> vfs_example_5] Wrote 24 bytes at offset 0
+! [init -> vfs_example_5] Read 24 bytes: A text to be remembered.
+! [init -> vfs_example_5] Wrote 28 bytes at offset 7
+! [init -> vfs_example_5] Read 35 bytes: A text that will soon be forgotten.
+
+Of course, the file will disappear as soon as the program exits, like with
+tmpfs in unix-based systems. I will come to persistent storage with the VFS
+also but in a later part of this series.
+
+If you played around a bit with example 5, you may have already noticed another
+interesting characteristic of Genodes VFS. I can add other file system plugins
+(like <inline> or <dir>) to '/my_notes'...
+
+! <dir name="my_notes">
+!   <ram/>
+!   <inline name="entry_2">An intriguing thought.</inline>
+!   <dir name="x"> <inline name="y">Hello world!</inline> </dir>
+! </dir>
+
+... and they will all appear in the same directory together with the in-memory
+files and directories that the program might create in the <ram> file system.
+
+This is because different file systems mounted inside a single VFS directory
+are organized as stack or union mount. Whenever someone has a file system
+request like "read /my_notes/entry_2" that enters 'my_notes', the request will
+be successively forwarded to the sub-file-systems of that directory in the
+order of their appearance in the configuration. So, in our example, the <ram>
+FS would be asked first to read the file. But it doesn't know 'entry_2' and
+therefore responds with an error. Then, the VFS would ask the <inline> FS. As
+this one yields a success, the last entry, the <dir> FS would never be asked.
+That said, the ordering of VFS plugins in a configuration can become very
+important for the runtime behavior of the VFS.
+
+Initializing file systems with the <import> plugin
+--------------------------------------------------
+
+As the final step of this article, I want to be able to populate my <ram>
+file system with some initial content. A good opportunity to introduce the <import>
+plugin ('repos/gems/src/lib/vfs/import')! In example 6, I have incorporated
+this plugin by adding it to the build directive and the boot image:
+
+! build { ... lib/vfs/import }
+! build_boot_image { ... vfs_import.lib.so }
+
+While the <dir>, <inline>, <log> and <ram> plugins are part of the VFS library
+itself, the <import> plugin is the first to come with its own library. Then, I
+configure the plugin as follows:
+
+! <vfs>
+!   <dir name="x"> <ram/> </dir>
+!   <dir name="dev"> <log/> </dir>
+!   <import>
+!     <dir name="x">
+!       <dir name="y">
+!         <inline name="z">An intriguing thought.</inline>
+!       </dir>
+!     </dir>
+!   </import>
+! </vfs>
+
+Think of the <import> node as of an overlay for the rest of the VFS. At program
+startup, <import> will copy its whole sub-file-system ...
+
+! <dir name="x"> <dir name="y"> <inline name="z">...</inline> </dir>
+
+... over the actual file system ...
+
+! <dir name="x"> <ram/> </dir>
+
+... which, in this example, would lead to creating a new directory '/x/y' and a
+new file '/x/y/z' at the <ram> FS and writing "An intriguing thought." to the
+new file. While inside the <import> node declared as static <inline> content,
+once imported to the <ram> FS, the file '/x/y/z' becomes a writable entity with
+initial content. The source file of the copy operation, however, like the whole <import>
+file system, will never be visible to the program. They disappear as soon
+the import is done.
+
+The <import> plugin is somewhat exceptional compared to other VFS plugins. It
+doesn't describe something that is mounted to the VFS and it disappears as soon
+as its job is done. So, it is more like a command to be issued at the VFS.
+Because of its semantic, the <import> node is allowed only once in a <vfs> node
+and only at root level. Inside the <import> node, I can use the same VFS
+plugins as in the <vfs> node to define the temporary source file system.
+This makes it a very powerful and versatile tool.
+
+But for now, we let's keep it simple. If you want to get a better feeling for
+the <import> mechanism, I suggest you to adapt example 6 to import two further
+files:
+
+! <vfs>
+!   <dir name="x"> <ram/> </dir>
+!   <dir name="dev"> <log/> </dir>
+!   <import>
+!     ...
+!     <inline name="a">Will this work?</inline>
+!     <dir name="dev">
+!       <inline name="log">What will happen?</inline>
+!     </dir>
+!   </import>
+! </vfs>
+
+The program now yields two additional lines of text right at the beginning:
+
+! [init -> vfs_example_6] What will happen?
+! [init -> vfs_example_6] Warning: skipping copy of file /a, OPEN_ERR_UNACCESSIBLE
+
+The first line takes place because the <import> plugin has no problem with a
+destination file that already exists and that even isn't a "conventional" file.
+It just opens the file (with the "create" flag set) and writes the given
+content to it. The <log> plugin then happens to forward the written content to
+the system log which produces an initial message from the program.
+
+The second line indicates that <import> failed to copy file '/a' to the VFS.
+This is reasonable. When entering '/' for creating the file, the VFS tries to
+forward its request to the sub-file-systems. However, there are only two <dir>
+file-systems in '/' and they cannot create the file as they are mere "doors" to
+sub-directories. Consequently, I could fix the warning by adding another file
+system to '/' that can create files, like the <ram> FS:
+
+! <vfs>
+!   <ram/>
+!   <dir name="x"> <ram/> </dir>
+!   <dir name="dev"> <log/> </dir>
+!   <import>
+!     ...
+!   </import>
+! </vfs>
+
+This time, file '/a' is successfully imported into the root <ram> FS.
+
+That's it for this article. I hope you enjoyed it! In the next article I will
+go into persistent storage and connecting components with the VFS. Till then!
