@@ -1,4 +1,4 @@
-                        Genodes VFS #1: The basics
+                       Genode's VFS #1: The basics
 
 Over the last years the Virtual File System (VFS) has played an ever more
 important role in Genode-based systems. Its applications cover not only access
@@ -6,7 +6,7 @@ to conventional file systems but also font servers, network stacks,
 cryptographic devices, debugging facilities, and more. Yet documentation about
 the VFS is quite scattered and context-specific. In this article series I'd
 like to gather simple examples that explain how to use most of the plugins and
-utilities around Genodes VFS.
+utilities around Genode's VFS.
 
 This article series is accompanied by a
 [https://github.com/m-stein/genode/tree/vfs_articles - Github branch] that
@@ -17,11 +17,13 @@ run Genode scenarios, please see the
 [https://genode.org/documentation/genode-foundations/21.05/getting_started/index.html - Genode Foundations book]
 first.
 
+_Edit 2021-06-24 by Martin Stein: Fix minor issues in the article and the corresponding Github branch_
+
 Static content with the <dir> and <inline> file systems
 -------------------------------------------------------
 
 Let's start with a very basic example that demonstrates some fundamental
-aspects of the Genode VFS. Unlike with most unix-based systems, file systems in
+aspects of the Genode VFS. Unlike with most Unix-based systems, file systems in
 Genode are component-local. That means, each program that uses the VFS has its
 own root directory that spans its very individual structure of directories and
 files. In order to equip an application with its own VFS and root directory,
@@ -63,6 +65,11 @@ available and empty:
 
 ! <dir path="/"/>
 
+Note that I had to explicitly add the shared object of the VFS library to the
+boot image in 'vfs_example_1.run':
+
+! build_boot_image { ... vfs.lib.so }
+
 Now, let's say I merely want to add a static text file to this directory. This
 is addressed by the <inline> file system (example 2):
 
@@ -81,7 +88,7 @@ print their content and size. Consequently, the output of example 2 looks as
 follows:
 
 ! <dir path="/">
-!   <file name="x">Some file content!</file>
+!   <file name="x" size="18">Some file content!</file>
 ! </dir>
 
 Next, I want to add a sub-directory by using the <dir> file system:
@@ -98,12 +105,13 @@ Running the scenario again, I can see my new directory listed:
 !   <file name="x" size="18">Some file content!</file>
 ! </dir>
 
-Change also the query path to '/y', FS query reports that 'y' is still empty:
+Changing also the query path to '/y', FS query reports that 'y' is still empty:
 
 ! <dir path="/y"/>
 
-I can combine <inline> and <dir> file systems to create an individual static
-file system for my component (example 3):
+I can combine <inline> and <dir> file systems to create individual static file
+systems for my component. Example 3 demonstrates this, assuming that we would
+be in some imaginary network component:
 
 ! <vfs>
 !   <inline name="README">Mail me for the README!</inline>
@@ -118,8 +126,8 @@ file system for my component (example 3):
 !   </dir>
 ! </vfs>
 
-And, as also demonstrated by example 3, I can set a list of multiple query
-commands for FS query and they will be concatenated into a single report:
+Example 3 also demonstrates that I can set a list of multiple query commands
+for FS query and they will be concatenated into a single report:
 
 ! <dir path="/">
 !   <dir name="config"/>
@@ -139,21 +147,26 @@ commands for FS query and they will be concatenated into a single report:
 Accessing a VFS from a POSIX/libc runtime
 -----------------------------------------
 
-Although you can access a VFS also from Genodes native runtime, I'd like to
+Although you can access a VFS also from Genode's native runtime, I'd like to
 start with the POSIX/libc runtime. I think that for developers accustomed to
-unix-based systems this is the easier way to get their hands on it and it is
+Unix-based systems this is the easier way to get their hands on it and it is
 valuable knowledge anyway considering the importance of ported software for
 Genode.
 
 In example 4, I integrate a small program that I equipped with the POSIX/libc
-runtime and the VFS by adding the corresponding libraries to its makefile
+runtime by adding the library to its makefile
 (repos/gems/src/app/vfs_example_4/target.mk):
 
-! LIBS = posix vfs
+! LIBS = posix
 
-I can configure the VFS just the same way as I did with the FS-query tool. But
-There is something new. The <log/> file-system plugin adds a single file named
-'log' that forwards everything written to it to the Log session of the program:
+The POSIX library depends on Genode's libc library, and the libc library on
+Genode's VFS library. Therefore, I don't have to add the VFS library
+explicitly. It's even better to not add it, so, ABI-wise, the component only
+depends on the POSIX interface (but this would go beyond the scope of this
+article). I can configure the VFS just the same way as I did with the FS-query
+tool. But There is something new. The <log/> file-system plugin adds a single
+file named 'log' that forwards everything written to it to the Log session of
+the program:
 
 ! <dir name="dev"> <log/> </dir>
 
@@ -165,7 +178,7 @@ environment with a standard output:
 
 This is necessary as otherwise, calling printf from inside the POSIX program
 in order to generate serial output would be in vane (and I don't want
-to directly call Genodes native Log session from inside a POSIX program but
+to directly call Genode's native Log session from inside a POSIX program but
 rather stay with POSIX-native tools).
 
 The program code is quite simple. As I linked the POSIX library, the program
@@ -231,11 +244,11 @@ As expected, the file content changes:
 ! [init -> vfs_example_5] Read 35 bytes: A text that will soon be forgotten.
 
 Of course, the file will disappear as soon as the program exits, like with
-tmpfs in unix-based systems. I will come to persistent storage with the VFS
+tmpfs in Unix-based systems. I will come to persistent storage with the VFS
 also but in a later part of this series.
 
 If you played around a bit with example 5, you may have already noticed another
-interesting characteristic of Genodes VFS. I can add other file system plugins
+interesting characteristic of Genode's VFS. I can add other file system plugins
 (like <inline> or <dir>) to '/my_notes'...
 
 ! <dir name="my_notes">
