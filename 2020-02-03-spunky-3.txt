@@ -12,13 +12,16 @@ more Ada and less C++. Maybe later this work will also lead to some formal
 verification with SPARK. But for now, I'm happy with Ada. So let's go!
 
 You can find the code behind this article on my
-[https://github.com/m-stein/genode/commits/3308_spunky_a_kernel_using_ada - Github branch].
-If you're interested in the recent state of my work, you may have a look at
-the [https://github.com/genodelabs/genode/issues/3308 - Github issue]. You
-also might want to read the former articles of this series:
+[https://github.com/m-stein/genode/commits/3308_spunky_a_kernel_using_ada_article_4 - Github branch].
+If you're interested in the discussion around Spunky, you may have a look at
+the [https://github.com/genodelabs/genode/issues/3308 - Github issue].
+And finally, this is a list of all articles in this series:
 
-* [http://genodians.org/m-stein/2019-05-09-spunky-1 - Part 1: RPC].
-* [http://genodians.org/m-stein/2019-12-20-spunky-2 - Part 2: Signals, FOSDEM, Repo].
+* [http://genodians.org/m-stein/2019-05-09-spunky-1 - Part 1: RPC]
+* [http://genodians.org/m-stein/2019-12-20-spunky-2 - Part 2: Signalling]
+* [http://genodians.org/m-stein/2020-02-03-spunky-3 - Part 3: CPU scheduler & desktop system]
+* [http://genodians.org/m-stein/2021-06-07-spunky-4 - Part 4: Kernel Timing]
+* [http://genodians.org/m-stein/2021-07-05-spunky-5 - Part 5: IRQ controller driver]
 
 Running the Sculpt desktop OS on Spunky
 ---------------------------------------

@@ -1,0 +1,246 @@
+                 Spunky #5: IRQ controller driver
+
+In this article series I illustrate the development of an Ada kernel for Genode
+named Spunky. The approach is to first successively translate parts from the
+C++ base-hw kernel and temporarily integrate them with the remaining C++ parts.
+Once, the whole Kernel made it to Ada, Spunky can be further developed
+independently to benefit from the characteristics of Ada or even SPARK. This
+time, I talk about my personal learning curve regarding low-level programing
+with Ada and the porting of the IRQ controller driver.
+
+You can find the code behind this article on my
+[https://github.com/m-stein/genode/commits/3308_spunky_a_kernel_using_ada_article_4 - Github branch].
+If you're interested in the discussion around Spunky, you may have a look at
+the [https://github.com/genodelabs/genode/issues/3308 - Github issue].
+And finally, this is a list of all articles in this series:
+
+* [http://genodians.org/m-stein/2019-05-09-spunky-1 - Part 1: RPC]
+* [http://genodians.org/m-stein/2019-12-20-spunky-2 - Part 2: Signalling]
+* [http://genodians.org/m-stein/2020-02-03-spunky-3 - Part 3: CPU scheduler & desktop system]
+* [http://genodians.org/m-stein/2021-06-07-spunky-4 - Part 4: Kernel Timing]
+* [http://genodians.org/m-stein/2021-07-05-spunky-5 - Part 5: IRQ controller driver]
+
+Learning more about Ada low-level programming
+---------------------------------------------
+
+In my last article about Spunky I wrote that I remained unsatisfied with my
+first attempt of driver development in Ada. However, I was most positively
+surprised about the fast and constructive feedback I received on this article
+out of the Ada community. People took their time to share their experience with
+me, to discuss with me. And that enabled me to clean up some of the dirty
+corners in my drivers that had annoyed me and to improve my programming
+patterns for future development. *Thank you for this!*
+
+I think, that it is a good idea to share the outcome of this process here
+and I will also reference this kind of an update on the topic from my other
+article. So let's go through the points again:
+
+*Accessing components of atomic registers*
+
+First, I learned that I was using the wrong aspect for controlling the way of
+accessing MMIO registers. I used 'Atomic' but 'Volatile_Full_Access' is more
+appropriate for two reasons:
+
+* Unless 'Atomic', 'Volatile_Full_Access' does not assume that actions on the
+  object must be sequential. It therefore doesn't create synchronization
+  points (this wouldn't be necessary anyway given Spunky's approach of a
+  global kernel lock which renders it practically single-threaded).
+
+* 'Volatile_Full_Access' guarantees that each access covers every bit of the
+  object whereas with 'Atomic', the compiler is allowed to access only part
+  of the object if the object is not referenced as a whole.
+
+Having fixed that, I tried the suggestion to introduce two types for each
+register that has a bit layout. This was meant to solve conflicts between
+handling stack copies of registers and the MMIO-related aspects that also
+applied to these copies. The idea was that one type declares only the
+components of the register without any aspects or representation clauses. And
+another type is a derivation of the first, adding the aspects and
+representation clauses.
+
+This way, stack copies of a register also do not underly any restrictions and
+can be optimized best by the compiler. At the other hand, the approach adds
+declarative overhead in the form of an additional type for each register and
+also questionable runtime overhead whenever one converts between the two types
+of a register:
+
+! type B_Base is record
+!    X : Unsigned_8;
+! end record;
+!
+! type B_Register is new B_Base with Size => 64, Volatile_Full_Access;
+!
+! for B_Register use record
+!    X at 0 range 16 .. 23;
+! end record;
+!
+! B_Reg_U64 : Unsigned_64 := 16#12345678#;
+! B_Reg     : B_Register with Address => B_Reg_U64'Address;
+!
+! --  potentially re-arranges object layout
+! B_Copy : B_Base := B_Base (B_Reg);
+
+So, in a next step, I moved the 'Volatile_Full_Access' aspect to the
+instantiation of the register and the 'Size' aspect and representation clause
+to the base type. This way, I can partially access stack copies and don't have
+the conversion overhead:
+
+! type A_Register is record
+!    X : Unsigned_8;
+! end record with Size => 64;
+!
+! for A_Register use record
+!    X at 0 range 16 .. 23;
+! end record;
+!
+! A_Reg_U64  : Unsigned_64 := 16#12345678#;
+! A_Reg      : A_Register with Volatile_Full_Access, Address => A_Reg_U64'Address;
+!
+! --  object layout stays the same
+! A_Copy : A_Register := A_Reg;
+
+At this point, I realized another problem with my approach. From Genode's C++
+framework for MMIO I was accustomed to declaring only those parts of the bit
+layout of a register that are actually defined by hardware and addressed by
+code. The framework then takes care of initializing, respectively "dragging
+along" the uncovered parts of the register. However, in Ada, I was unsure
+whether the language would do that.
+
+From the discussions, I learned that the
+[https://github.com/AdaCore/Ada_Drivers_Library - Ada Drivers Library] project
+uses the approach of fully declaring the bit layout of every used register
+(including reserved bits) and therefore doesn't have to worry about. The
+layouts are furthermore written down in the SVD format (an XML-based language)
+and are then automatically translated into Ada code using the
+[https://github.com/AdaCore/svd2ada - svd2ada] tool.
+
+Admittedly, I wasn't very eager to determine the missing parts of the x86
+register layouts in base-hw. Even less to port these layouts to XML and add
+svd2ada as a dependency. So, I did a quick experiment with my partial example
+layout:
+
+_Declaration_
+! A_Copy_U64 : Unsigned_64 with Address => A_Copy'Address;
+
+_Body_
+! Print_U64 (A_Reg_U64);
+! Print_U64 (A_Copy_U64);
+! A_Copy.X := 0;
+! A_Reg := A_Copy;
+! Print_U64 (A_Reg_U64);
+! Print_U64 (A_Copy_U64);
+
+_Output_
+! 0x12345678
+! 0x12345678
+! 0x12005678
+! 0x12005678
+
+While further playing around with this example, I found that Ada always moved
+around the whole area defined through the 'Size' aspect regardless of whether
+the object is set to "full access only" or not (like when creating a second
+copy of 'A_Copy'). Of course, this holds true only as long as the reference is
+the whole object. That said, I stayed with this design for now.
+
+*Converting between register records and plain integers*
+
+This problem arose in a scenario where I have two register addresses given.
+Writing an identifier to the first address selects which register appears
+behind the second address. This way, a large amount of registers can be
+reflected via a very small MMIO area (two times the size of a register).
+
+When I tried to express this in Ada I remained puzzled at first and got stuck
+with the idea that the second address should reference a plain integer type
+and that, consequently, I should have to be able to convert the individual
+register types.
+
+However, I was not aware of the fact that I can just map all individual
+registers to the same (the second) address. I still have to ensure to access
+a specific one out of them only after having written the corresponding
+identifier first. But the need for conversions is gone.
+
+*Redundancy when declaring memory layouts*
+
+Regarding this issue, I learned that all type/object-related pragmas I know so
+far can be expressed as aspect directly behind the affected type or object.
+This renders my code a bit less bloated. For the representation clauses of bit
+fields, however, there seems to be no other solution than re-writing the whole
+record.
+
+*Dynamic base addresses for MMIO regions*
+
+This is a problem that I didn't list the last time. In the meantime, I found at
+least a working solution and I just wanted to document it here.
+
+Initially, my understanding of the 'Address' aspect was that it defines a
+static value for the address of an object. This is very useful for declaring
+MMIO layouts and as, currently, I always test with the same target anyway it's
+unlikely for addresses to change. Nonetheless, I'm working with virtual
+addresses that depend on runtime mapping decisions and even on a physical
+level, addresses are sometimes variable and then be better requested from
+hardware.
+
+With this problem at hand, I found that 'Address' can also be used with
+dynamic values. For instance in the x86 timer-device driver I now read out the
+physical MMIO base of the local APIC from a register and then let the kernel
+mapping data-bench determine the virtual pendant to it:
+
+
+! type Timer_Device_Type is record
+!    ...
+!    LAPIC_Virt_Base : Address_Type;
+! end record;
+!
+! function Get_LAPIC_Virt_Address
+! return Address_Type;
+!
+! procedure Initialize (Device : out Timer_Device_Type)
+! ...
+! begin
+!
+!    Device.LAPIC_Virt_Base := Get_LAPIC_Virt_Address;
+!    ...
+! end Initialize;
+!
+! procedure PIT_Measure_Ticks_Per_MS (Device : in out Timer_Device_Type)
+! is
+!    ...
+!    Current_Cnt_Reg : Unsigned_32
+!    with
+!       Volatile_Full_Access,
+!       Address => U64_To_Addr (Device.LAPIC_Virt_Base + 16#390#);
+! begin
+!    ...
+!    Start_Cnt := Current_Cnt_Reg;
+!    ...
+! end PIT_Measure_Ticks_Per_MS;
+
+However, the downside of this approach, so far, is that I have to declare
+registers locally in each sub-program that uses them. I'm still looking for a
+less bloated solution, maybe by using generics.
+
+Porting the IRQ controller driver
+---------------------------------
+
+The IRQ controller object in base-hw represents the CPU-core-local part of the
+device driver. But there is also some state that is related to the IRQ
+controller as a whole, independent from the CPU core I'm at. This state is
+still held in global static variables in the driver class. I normally try to
+circumvent global statics wherever possible, but this time I procrastinated and
+just created pendants in the top-level scope of the Ada driver package. Note
+that, by now, I didn't do any investigation on elaboration code in the kernels
+Ada runtime (because, presumably, it wasn't needed). So, in order to get the
+new package-level variables initialized right, I just added another procedure
+that will be called from the C++ world in the right moment. However, I'll soon
+have to implement a more elegant solution first in base-hw, and then also in
+Spunky.
+
+Apart from that, the IRQ controller didn't hold many surprises. I tested on a
+single-core first and, as had occured before, the interfacing between C++ and
+Ada gave me some troubles. One has to be very disciplined here. Once fixed, I
+went to an SMP system which also didn't work directly. The issue was with my
+old MMIO approach in Ada that I initially applied to the driver. With the new
+approach applied consistently, SMP now works as well.
+
+In the next article, I will talk about using the GNAT binder for Spunky and
+porting the CPU device driver.

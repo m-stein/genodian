@@ -11,13 +11,14 @@ timer driver.
 You can find the code behind this article on my
 [https://github.com/m-stein/genode/commits/3308_spunky_a_kernel_using_ada_article_4 - Github branch].
 If you're interested in the discussion around Spunky, you may have a look at
-the
-[https://github.com/genodelabs/genode/issues/3308 - Github issue].
-You also might want to read the former articles of this series:
+the [https://github.com/genodelabs/genode/issues/3308 - Github issue].
+And finally, this is a list of all articles in this series:
 
-* [http://genodians.org/m-stein/2019-05-09-spunky-1 - Part 1: RPC].
-* [http://genodians.org/m-stein/2019-12-20-spunky-2 - Part 2: Signalling].
-* [http://genodians.org/m-stein/2020-02-03-spunky-3 - Part 3: CPU scheduler & desktop system].
+* [http://genodians.org/m-stein/2019-05-09-spunky-1 - Part 1: RPC]
+* [http://genodians.org/m-stein/2019-12-20-spunky-2 - Part 2: Signalling]
+* [http://genodians.org/m-stein/2020-02-03-spunky-3 - Part 3: CPU scheduler & desktop system]
+* [http://genodians.org/m-stein/2021-06-07-spunky-4 - Part 4: Kernel Timing]
+* [http://genodians.org/m-stein/2021-07-05-spunky-5 - Part 5: IRQ controller driver]
 
 Translating kernel timing to Ada
 --------------------------------
