@@ -1,0 +1,85 @@
+                Genode's VFS #2: Interconnections and storage
+
+Over the last years the Virtual File System (VFS) has played an ever more
+important role in Genode-based systems. Its applications cover not only access
+to conventional file systems but also font servers, network stacks,
+cryptographic devices, debugging facilities, and more. Yet documentation about
+the VFS is quite scattered and context-specific. In this article series I'd
+like to gather simple examples that explain how to use most of the plugins and
+utilities around Genode's VFS.
+
+This article series is accompanied by a
+[https://github.com/m-stein/genode/tree/vfs_articles - Github branch] that
+contains several Genode scenarios for you to play around with. The scenarios
+are named 'repos/gems/run/vfs_example_x.run' where x is the example number. I
+will refer to them as "example x" in the articles. If you don't know how to
+run Genode scenarios, please see the
+[https://genode.org/documentation/genode-foundations/21.05/getting_started/index.html - Genode Foundations book]
+first.
+
+Access to ROM files
+-------------------
+
+A perfect warmup for persistent storage and interconnectivity with the VFS is
+the <rom> plugin (example 7):
+
+! <vfs>
+!   <dir name="friendly"> <rom name="greetings" label=""/> </dir>
+! </vfs>
+
+It causes the VFS to request a session of Genode's ROM service (which simply
+means access to a read-only file provided by another program) and provides
+local access to it through a VFS file. The 'label' attribute determines the
+session label (in the context of the ROM service usually the name of the file
+at the server). The 'name' attribute sets the name of the file in the local
+VFS. Let me add a server component that provides a file "greetings_rom":
+
+! <start name="dynamic_rom">
+!   ...
+!   <provides><service name="ROM"/> </provides>
+!   <config>
+!     <rom name="greetings_rom">
+!       <inline>Hello world!</inline>
+!       ...
+!     </rom>
+!   </config>
+! </start>
+
+The dynamic ROM is normally used for read-only files whose content shall change
+over time, but it works for static files as well and I wanted to make the role
+of the service provider very clear. Because there is also another
+provider of the ROM service in this example that is not as visible: Genode's
+Core. As a side note: You can make good use of Core's ROM service. It allows
+you to communicate host files to your VFS scenario. It'd be only some small
+changes to example 7:
+
+! install_config {
+!   ...
+!   <start name="vfs_example_7">
+!     ...
+!     <config>...</config>
+!     <!-- all routes removed as the default route leads to parent already -->
+!   </start>
+! ...
+! }
+! # create host file
+! exec echo "Bonjour!" > bin/greetings_rom
+!
+! # core provides each boot module as ROM file
+! build_boot_image { greetings_rom ... }
+
+This also demonstrates that now, the content of the local file
+'/friendly/greetings' depends on aspects outside the example program. First,
+from the decision of the Init program (the one that is configured via
+'install_config') to which other component to route the ROM session request
+(configurable through the '<route>' tags). And second, of course, on the
+behavior of that other component.
+
+As you might have noticed, the example component used in this scenario is
+similar to that in example 4 from my last VFS article. Indeed, the only
+difference between example 4 and 7 is that, in the latter, I used the <rom>
+plugin instead of the <inline> plugin as back end for '/friendly/greetings'.
+This makes the lifetime and management of the file independent from the
+application. For the application code, however, the difference is transparent.
+
+
