@@ -17,7 +17,14 @@ run Genode scenarios, please see the
 [https://genode.org/documentation/genode-foundations/21.05/getting_started/index.html - Genode Foundations book]
 first.
 
-_Edit 2021-06-24 by Martin Stein: Fix minor issues in the article and the corresponding Github branch_
+These are all articles in this series so far:
+
+* [http://genodians.org/m-stein/2021-06-21-vfs-1 - Part #1: The basics]
+* [http://genodians.org/m-stein/2021-07-19-vfs-2 - Part #2: Storage and interconnections]
+
+Updates to this article:
+
+* 2021-06-24, Martin Stein: Fix minor issues in the article and the corresponding Github branch
 
 Static content with the <dir> and <inline> file systems
 -------------------------------------------------------
@@ -323,7 +330,7 @@ and only at root level. Inside the <import> node, I can use the same VFS
 plugins as in the <vfs> node to define the temporary source file system.
 This makes it a very powerful and versatile tool.
 
-But for now, we let's keep it simple. If you want to get a better feeling for
+But for now, let's keep it simple. If you want to get a better feeling for
 the <import> mechanism, I suggest you to adapt example 6 to import two further
 files:
 
