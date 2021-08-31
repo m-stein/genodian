@@ -1,0 +1,83 @@
+                 Spunky #6: CPU device driver
+
+In this article series I illustrate the development of an Ada kernel for Genode
+named Spunky. The approach is to first successively translate parts from the
+C++ base-hw kernel and temporarily integrate them with the remaining C++ parts.
+Once, the whole Kernel made it to Ada, Spunky can be further developed
+independently to benefit from the characteristics of Ada or even SPARK. This
+time, I'll talk about the port of the CPU device driver and about the use of
+the GNAT binder for the Spunky main package.
+
+You can find the code behind this article on my
+[https://github.com/m-stein/genode/commits/3308_spunky_a_kernel_using_ada_article_6 - Github branch].
+If you're interested in the discussion around Spunky, you may have a look at
+the [https://github.com/genodelabs/genode/issues/3308 - Github issue].
+And finally, this is a list of all articles in this series:
+
+* [http://genodians.org/m-stein/2019-05-09-spunky-1 - Part 1: RPC]
+* [http://genodians.org/m-stein/2019-12-20-spunky-2 - Part 2: Signalling]
+* [http://genodians.org/m-stein/2020-02-03-spunky-3 - Part 3: CPU scheduler & desktop system]
+* [http://genodians.org/m-stein/2021-06-07-spunky-4 - Part 4: Kernel Timing]
+* [http://genodians.org/m-stein/2021-07-05-spunky-5 - Part 5: IRQ controller driver]
+* [http://genodians.org/m-stein/2021-09-06-spunky-6 - Part 6: CPU device driver]
+
+Porting the CPU device driver
+-----------------------------
+
+Preparing the base-hw classes for being ported to Ada has almost become a
+routine. The main challenge this time was to first get an overview of all the
+parts that form the CPU device driver and how they are connected to the generic
+code (the different abstractions and platforms of base-hw can be confusing
+here), and second to get rid of others deriving from CPU driver stuff. The
+latter had also quiet a clean-up effect for base-hw itself.
+
+Simply speaking, base-hw has two CPU abstractions. One is the class
+'Genode::Cpu', the device driver with hardware-specific implementations. It
+provides a generic interface for things like maintaining CPU caches and reading
+fault information but, unfortunately, it also has hardware-specific interfaces
+that are used only by other hardware-specific components of the kernel.
+
+The second abstraction is the class 'Kernel::Cpu' that is a generic compound of
+all CPU-core-local kernel data which includes an instance of 'Genode::Cpu' but
+also the local scheduler, the local timer or the local idle thread. This class
+will be my next big target for Spunky but some of its data members are not yet
+translated.
+
+So, I started porting 'Genode::Cpu' after the clean-up. I noticed that I became
+more comfortable with low-level programming in Ada over the last two drivers. I
+even wanted to set one atop and implement access to Model Specific Registers
+(MSRs) and Control Registers (CRs), that is still done using evil preprocessor
+macros in base-hw, by introducing some generics on inline assembly. This
+approach turned out to be quite elegant when one is fine with some
+(size-guarded) local variable overlays.
+
+Unfortunately, at first, these generics threw me into some trouble. Initially,
+I declared them as sub-packages of the CPU driver and shortly after that, Ada
+told me that it would require a secondary stack for calling the generics. This
+didn't raise any suspicion in me, as fortunately, I already got a rough concept
+of the secondary stack and its initialization. I started educating myself more
+about the GNAT binder and the Ada main package and even could re-use some
+Make-code that already existed from the CBE project. Nonetheless, the
+integration of a main package in Spunky remained a puzzle that did cost me some
+time to solve.
+
+Once, I had it all set-up, there was this morning when I came to work a little
+brighter than usual and asked myself how it could be that I have other generics
+in Spunky and didn't need a secondary stack so far? The answer was that
+declaring my MSR/CR generics as self-standing units rather than sub-packages
+caused the dependency on the secondary stack to disappear. I took comfort in
+the fact that the effort at least wasn't completely in vain - it's not unlikely
+that Spunky will need the Ada main package at some point.
+
+One noteworthy side-effect of having to deal with the CPU abstractions of
+base-hw again is that it made me realize that base-hw might require a more
+fundamental clean-up before my efforts to smoothly transition to Ada can enter
+higher abstraction layers. One flaw that the base-hw design has on these
+levels of, for instance, the generic CPU class (Kernel::Cpu), quite some
+objects are simply instantiated as global statics using mechanisms like the
+'unmanaged_singleton' that better are not to be copied by Spunky.
+
+That's it for this time. I hope you enjoyed it and maybe even checked out the
+code! And I'm happy about constructive feedback. In the next article, I will
+talk about porting the last data members of the generic CPU class in
+preparation for porting the class itself.
