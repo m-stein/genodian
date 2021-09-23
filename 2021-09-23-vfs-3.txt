@@ -1,0 +1,157 @@
+                        Genode's VFS #3: Networking
+
+Over the last years the Virtual File System (VFS) has played an ever more
+important role in Genode-based systems. Its applications cover not only access
+to conventional file systems but also font servers, network stacks,
+cryptographic devices, debugging facilities, and more. Yet documentation about
+the VFS is quite scattered and context-specific. In this article series I'd
+like to gather simple examples that explain how to use most of the plugins and
+utilities around Genode's VFS.
+
+This article series is accompanied by a
+[https://github.com/m-stein/genode/tree/vfs_articles - Github branch] that
+contains several Genode scenarios for you to play around with. The scenarios
+are named 'repos/gems/run/vfs_example_x.run' where x is the example number. I
+will refer to them as "example x" in the articles. If you don't know how to
+run Genode scenarios, please see the
+[https://genode.org/documentation/genode-foundations/21.05/getting_started/index.html - Genode Foundations book]
+first.
+
+These are all articles in this series so far:
+
+* [http://genodians.org/m-stein/2021-06-21-vfs-1 - Part #1: The basics]
+* [http://genodians.org/m-stein/2021-07-19-vfs-2 - Part #2: Storage and interconnections]
+* [http://genodians.org/m-stein/2021-09-23-vfs-3 - Part #3: Networking]
+
+
+Instantiating a local TCP/IP stack with the VFS
+-----------------------------------------------
+
+There are two VFS plugins that implement a TCP/IP stack. The 'lwip' plugin is
+based on a port of lightweight IP (lwIP) while the 'lxip' plugin uses the
+TCP/IP stack ported from the Linux kernel. While the former can be assumed to
+be
+[https://genode.org/documentation/release-notes/18.08#New_VFS_plugin_for_using_LwIP_as_TCP_IP_stack - less complex],
+the latter can be assumed to be better equipped for high transfer rates
+([https://genode.org/documentation/release-notes/13.11#Gigabit_networking_using_the_Linux_TCP_IP_stack - gigabit networking]).
+
+The configuration interface of the plugins is pretty much the same. Both are
+able to accomplish dynamic configuration via DHCP by setting the 'dhcp'
+attribute:
+
+! <vfs> <dir name="socket"> <lwip dhcp="yes"/> </dir> </vfs>
+
+! <vfs> <dir name="socket"> <lxip dhcp="yes"/> </dir> </vfs>
+
+Alternatively, the stacks can be configured statically:
+
+! <vfs>
+!   <dir name="socket">
+!     <lwip ip_addr="10.0.3.55"
+!           netmask="255.255.255.0"
+!           gateway="10.0.3.1"
+!           nameserver="8.8.8.8"/>
+!   </dir>
+! </vfs>
+
+! <vfs>
+!   <dir name="socket">
+!     <lxip ip_addr="10.0.3.55"
+!           netmask="255.255.255.0"
+!           gateway="10.0.3.1"
+!           nameserver="8.8.8.8"/>
+!   </dir>
+! </vfs>
+
+The corresponding attributes are all the same for both plugins and the
+'nameserver' attribute is always optional. The 'lxip' plugin furthermore has an
+optional attribute 'mtu' that configures the stacks MTU in bytes:
+
+! <vfs>
+!   <dir name="socket">
+!     <lxip ... mtu="1000"/>
+!   </dir>
+! </vfs>
+
+When the 'mtu' attribute is not set or set to 0, the LxIP MTU defaults to a
+value of 1500. The 'lwip' plugin, in contrast, doesn't have such an attribute
+and always configures its stack with an MTU of 1500.
+
+Example 11 shows the IP-stack plugins in action. It consists of a simple
+server/client pair for HTTP. If I focus on the tags '<lxip>' and '<lwip>', I
+can already tell that the server has a static IP configuration while the client
+uses DHCP. But let's get into more detail about what happens here.
+
+The IP-stack plugins generally use Genode's NIC service as back end. This
+service is for transferring Ethernet frames between two components (a NIC
+session can therefore be seen as a virtual Ethernet cable). Note that here I'm
+referring to transfers between the server and client component of the NIC
+service. Those two are not the same as the server and client of the HTTP
+connection! The latter are the applications (vfs_example_11-client,
+vfs_example_11-server), both with an IP-stack that acts as NIC client, and in
+between them sits the NIC router that acts as NIC server for either of them.
+
+The NIC router mediates between the two NIC sessions and thereby enables the
+IP-stacks to talk to each other. It's like the two applications would be real
+machines in two real IP subnets connected through a real router.
+
+Towards the application code, the IP-stacks provide a socket file system that
+can be plugged into Genodes libc environment using the 'socket' attribute:
+
+! <libc socket="/socket">
+
+This is somehow comparable to the 'stdout="/dev/log"' that I used in my
+[http://genodians.org/m-stein/2021-06-21-vfs-1 - first VFS article] for
+propagating a '<log>' file. However, this time I have to point the libc to the
+directory that contains the plugin, not to the plugin itself. This is
+because an IP-stack plugin mounts not only a single file but a file system
+whose structure normally also changes at runtime. In the example, the 'socket'
+directory would initially look like this:
+
+! /socket/tcp/new_socket
+! /socket/udp/new_socket
+! /socket/address
+! /socket/netmask
+! /socket/gateway
+! /socket/nameserver
+
+The last four files reflect the current network configuration as ASCII text of
+IP addresses. The 'new_socket' files enable the user to create network sockets
+by opening them and reading the name of the just created TCP or UDP socket.
+Again, the content of the file is just ASCII text. Whenever I create a socket
+like this, the plugin adds a new socket directory. The directory contains a
+handful of files, which provide an interface to operate on the socket. It would
+look like this for a TCP socket named "1":
+
+! /socket/tcp/1/bind
+! /socket/tcp/1/connect
+! /socket/tcp/1/data
+! /socket/tcp/1/local
+! /socket/tcp/1/remote
+
+However, for a libc user, this might not be of much interest because he can
+just use the libc socket API ontop of it as you can see in the applications
+code ('<genode>/repos/gems/src/app/vfs_example_11'). Don't be surprised as this
+code is not POSIX-environment-based as in all former examples but
+libc-environment-based one mixed with native Genode code.
+
+And interesting thing about this example is that you can switch between
+the two stack types as you whish by just replacing 'lxip' with 'lwip' and
+vice-versa. To the applications, the change is transparent. A noteworthy
+difference, however, is that with lwIP, you could lower the RAM contingent of
+the applications to only 3 MByte:
+
+! <resource name="RAM" quantum="3M"/>
+
+The pre-set value of 28 MByte is only required for the more complex LxIP.
+
+Last but not least, I could also share an IP-stack among multiple applications
+by moving it into an extra VFS server as depicted in my
+[http://genodians.org/m-stein/2021-07-19-vfs-2 - last VFS article]. You might
+find it a nice exercise trying to adapt example 11 in a way that it spawns two
+HTTP-client components operating on the same (remotely instantiated) IP-stack
+while the HTTP-server stays with its local stack! But don't forget to adapt
+the NIC-router policy accordingly ;) (solution provided in example 12).
+
+That's it - as promised a shorter story this time - and I hope you enjoyed it
+as well. See you next time!
