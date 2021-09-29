@@ -1,0 +1,23 @@
+                      About the CBE design approach
+
+In this article, I'd like to document the design approach applied in the CBE
+because I find it particularly interesting and elegant in some ways. Although
+the article was motivated through my work at the CBE project, I didn't add it
+to the CBE article series because the concept is not CBE specific and, in fact,
+existed in great part already before the CBE with projects like Genode's VFS
+and propably even earlier in other systems that I don't know. So, please don't
+take this as a claim for the concept to be my idea - I just want to document
+it ;)
+
+Advantages
+
+Disadvantages
+
+* Finding a solution for a problem that fits well into the described concept
+  was sometimes the contrary of "straight forward" for me. I had to get used to
+  it - but the result is worth it.
+
+* The design might produce a notable amount of bureaucratic code. However,
+  this bureaucracy consists of only a handful of very basic things that are
+  repeated very often. Creating a generic framework for this might be worth
+  further investigation.

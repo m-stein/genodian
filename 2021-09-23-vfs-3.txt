@@ -1,6 +1,6 @@
                         Genode's VFS #3: Networking
 
-Over the last years the Virtual File System (VFS) has played an ever more
+Over the past years, the Virtual File System (VFS) has played an ever more
 important role in Genode-based systems. Its applications cover not only access
 to conventional file systems but also font servers, network stacks,
 cryptographic devices, debugging facilities, and more. Yet documentation about
@@ -28,7 +28,7 @@ Instantiating a local TCP/IP stack with the VFS
 -----------------------------------------------
 
 There are two VFS plugins that implement a TCP/IP stack. The 'lwip' plugin is
-based on a port of lightweight IP (lwIP) while the 'lxip' plugin uses the
+based on a port of lightweight IP (lwIP) whereas the 'lxip' plugin uses the
 TCP/IP stack ported from the Linux kernel. While the former can be assumed to
 be
 [https://genode.org/documentation/release-notes/18.08#New_VFS_plugin_for_using_LwIP_as_TCP_IP_stack - less complex],
@@ -73,7 +73,7 @@ optional attribute 'mtu' that configures the stacks MTU in bytes:
 !   </dir>
 ! </vfs>
 
-When the 'mtu' attribute is not set or set to 0, the LxIP MTU defaults to a
+If the 'mtu' attribute is not set or set to 0, the LxIP MTU defaults to a
 value of 1500. The 'lwip' plugin, in contrast, doesn't have such an attribute
 and always configures its stack with an MTU of 1500.
 
@@ -96,7 +96,7 @@ IP-stacks to talk to each other. It's like the two applications would be real
 machines in two real IP subnets connected through a real router.
 
 Towards the application code, the IP-stacks provide a socket file system that
-can be plugged into Genodes libc environment using the 'socket' attribute:
+can be plugged into Genode's libc environment using the 'socket' attribute:
 
 ! <libc socket="/socket">
 
@@ -129,14 +129,14 @@ look like this for a TCP socket named "1":
 ! /socket/tcp/1/local
 ! /socket/tcp/1/remote
 
-However, for a libc user, this might not be of much interest because he can
-just use the libc socket API ontop of it as you can see in the applications
+However, for a libc user, this might not be of much interest because one can
+just use the libc socket API on top of it as you can see in the applications
 code ('<genode>/repos/gems/src/app/vfs_example_11'). Don't be surprised as this
 code is not POSIX-environment-based as in all former examples but
 libc-environment-based one mixed with native Genode code.
 
-And interesting thing about this example is that you can switch between
-the two stack types as you whish by just replacing 'lxip' with 'lwip' and
+An interesting detail about this example is that you can switch between
+the two stack types as you wish by merely replacing 'lxip' with 'lwip' and
 vice-versa. To the applications, the change is transparent. A noteworthy
 difference, however, is that with lwIP, you could lower the RAM contingent of
 the applications to only 3 MByte:
@@ -147,7 +147,7 @@ The pre-set value of 28 MByte is only required for the more complex LxIP.
 
 Last but not least, I could also share an IP-stack among multiple applications
 by moving it into an extra VFS server as depicted in my
-[http://genodians.org/m-stein/2021-07-19-vfs-2 - last VFS article]. You might
+[http://genodians.org/m-stein/2021-07-19-vfs-2 - previous VFS article]. You might
 find it a nice exercise trying to adapt example 11 in a way that it spawns two
 HTTP-client components operating on the same (remotely instantiated) IP-stack
 while the HTTP-server stays with its local stack! But don't forget to adapt

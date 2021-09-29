@@ -1,6 +1,6 @@
                 Genode's VFS #2: Storage and interconnections
 
-Over the last years the Virtual File System (VFS) has played an ever more
+Over the past years, the Virtual File System (VFS) has played an ever more
 important role in Genode-based systems. Its applications cover not only access
 to conventional file systems but also font servers, network stacks,
 cryptographic devices, debugging facilities, and more. Yet documentation about
@@ -21,6 +21,7 @@ These are all articles in this series so far:
 
 * [http://genodians.org/m-stein/2021-06-21-vfs-1 - Part #1: The basics]
 * [http://genodians.org/m-stein/2021-07-19-vfs-2 - Part #2: Storage and interconnections]
+* [http://genodians.org/m-stein/2021-09-23-vfs-3 - Part #3: Networking]
 
 Updates to this article:
 
