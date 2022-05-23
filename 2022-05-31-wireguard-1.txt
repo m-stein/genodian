@@ -1,0 +1,325 @@
+                         Bringing WireGuard to Genode
+
+About WireGuard
+---------------
+
+WireGuard is a protocol that implements encrypted, virtual private networks
+(VPNs) with focus on ease-of-use, a very small attack surface, and high
+performance. A WireGuard VPN works through encrypting IP packets of the
+private network and tunneling them in plain UDP packets through the public
+network.
+
+:Cryptography:
+
+One major difference to other tunneling solutions like IPSec and OpenVPN is
+that WireGuard is applying a fixed configuration of cryptographic algorithms
+and parameters. The advantages of this approach are that the protocol has a low
+complexity (implementations are in the range of a few thousand lines of code in
+size in comparison to, e. g., 90’000 with OpenVPN), initiating a tunnel is very
+fast, integrators and users don’t have to deal with crypto-related questions,
+security standards do not depend on individual configuration, and performance
+optimization can be tailored to the crypto setup in use. If the algorithms and
+parameters have to be changed in the future because, for instance, they would
+have been found vulnerable, the proposed strategy is to comprehensively update
+peers with a new version.
+
+WireGuard generally tries to avoid that users or integrators have to take a lot
+of care of the configuration or maintenance of a VPN. For instance, symmetric
+keys are automatically replaced when they hit a slightly randomized timeout
+and/or packet count in order to always keep forward secrecy ensured.
+Communication is kept connectionless in order to prevent the need for re- or
+disconnects. False response timeouts are prevented via empty intermediate
+packets. And peers under load add an extra cookie-exchange round to incoming
+handshakes to counter-act CPU-exhaustion.
+
+:Integration:
+
+Another notable contribution to the goal “ease-of-use” is that WireGuard is
+designed to integrate directly into the system’s networking stack. Towards the
+user, a WireGuard VPN looks like a common network interface, whereas towards
+the public network, it is a regular server/client on a configurable UDP port.
+Therefore, policies like the IP configuration of the interface or the routing
+towards it can be applied by using native tooling. The few settings of the
+interface that are WireGuard-specific - like the registration of other peers,
+the listen port, and the private key - are normally done using a small
+user-land tool. The result is that a WireGuard VPN-peer can be manually set up
+in a minute with specific knowledge required only about the public key, the
+port, and the IP addresses of each other peer. In contrast, creating a VPN with
+OpenVPN requires additional knowledge about certificate creation,
+tunnel-protocol options, peer roles, specific routing and IP configuration, and
+the different crypto algorithms respectively their parameters.
+
+:Performance:
+
+With regards to network performance, different benchmarks show that WireGuard
+reaches slightly lower latency and slightly higher throughput compared to
+IPSec. Compared to OpenVPN, however, WireGuard normally comes off significantly
+better in both disciplines. WireGuard’s high performance results are often
+accounted to the fact that its principal implementations makes good use of
+multithreading (see [https://www.wireguard.com/performance/ - wireguard.com],
+[https://restoreprivacy.com/vpn/wireguard-vs-openvpn/ - restoreprivacy.com], or
+[https://vladtalks.tech/vpn/is-wireguard-faster-than-openvpn - vladtalks.tech]).
+
+:Genode:
+
+That said, we sensed WireGuard to be an especially attractive candidate for
+peer-to-peer network security in the Genode OS framework. WireGuard’s
+comparatively low complexity fits well with Genode’s prinicple of minimizing
+the trusted computing base of critical applications. Furthermore, WireGuard
+shares Genode’s design tendency towards small, well defined component
+interfaces and a high grade of composability. And, given that Genode is
+currently making ground on smartphones as well, WireGuard’s slimness is also
+a benefit with regard to the limited resources of this domain.
+
+Implementation strategies
+-------------------------
+
+There exist a variety of WireGuard implementations:
+
+* The Linux kernel implementation written in C,
+* The Windows NT kernel implementation written in C,
+* The FreeBSD/OpenBSD kernel implementation written in C,
+* The minimalistic ESP-IDF implementation written in C,
+* The macOS/iOS userspace implementation written in Swift,
+* The BoringTun userspace implementation written in Rust,
+* A userspace implementation written in Go,
+* A userspace implementation written in Rust,
+* A userspace implementation written in Haskell
+
+We found that the Linux kernel variant is the principal implementation
+developed by Jason Donenfeld, the creator of the WireGuard protocol, and that
+it seems to be the most elaborate and examined one.
+
+From our perspective as Genode developers, the Linux and OpenBSD variants were
+especially suited for a port, as several drivers in Genode are ported from
+those systems and powerful frameworks emerged from those projects facilitating
+such a task in the future. However, we sensed that kernel implementations bear
+the risk of being tightly coupled to their original environments, which can
+lead to hard-to-grasp semantic interdependencies and the inflation of
+complexity by transitively pulling much more third-party code into the port
+than desired.
+
+This could have been mitigated by porting one of the existing user-space
+implementations instead. Unfortunately, those are all written in languages, for
+which the Genode framework, so far, provides only basic (Go, Rust) or no
+support (Haskell) and the maturing process of the language support itself would
+have added to the efforts of porting WireGuard. As for the ESP-IDF variant, we
+found that it is still in a premature state and aims for very specific target
+setups only.
+
+Consequently, we started further investigating the Linux variant. As a first
+step in this direction, we managed to create a reproducible, minimalistic Linux
+system in Qemu with a working WireGuard VPN to have something to compare to
+when debugging (this approach is introduced in
+[https://genodians.org/nfeske/2021-05-12-pine-fun-linux - Taking Linux out for a Walk]).
+
+Out of it, the WireGuard driver code comprised only around 4000 lines of code.
+Therefore, we initially considered an approach of cutting out only the driver
+and mocking all back ends manually. However, on our first attempt to get it
+compiled in Genode, we quickly realized that the inter-dependence between the
+driver and the rest of the kernel code is extremely tight and not explicitly
+expressed in terms of internal interfaces. This follows from the avoidance of
+shim layers inside the Linux kernel, which is generally desired from the
+perspective of the Linux kernel developers. On the other hand, this high
+dependence in kernel infrastructure rendered the approach impractical for us.
+
+At this point, we started evaluating the Windows implementation of WireGuard
+from which we knew that it was derived directly from the Linux version and that
+it was said to be more self-contained. We hoped to find code that is in great
+parts similar to the Linux version. Unfortunately, the whole code had
+apparently been rewritten to conform the Windows programming style, which would
+have prevented comparative debugging with our reference Linux-scenario, and
+still this version relied on more OS specifics than expected.
+
+So, the next step was accepting the additional Linux baggage and apply more
+efficient tooling instead. The Genode porting framework automates steps of the
+porting process that are normally tedious and time-intensive. It can, for
+instance, generate pseudo implementations for undefined symbols and determine
+the call order of module initialization functions. The framework also provides
+a Genode user-land emulation of the fundamental kernel semantics of Linux, like
+timing, scheduling or memory management.
+
+Two major goals of Genode’s porting framework are to keep re-implementations of
+the Linux semantics at a minimum (especially those that are
+application-specific) as well as to prevent patching of third-party code.
+For more about the modernized framework see
+[https://genodians.org/skalk/2021-04-06-dde-linux-experiments - Breaking New Grounds],
+[https://genodians.org/skalk/2021-04-08-dde-linux-experiments-1 - Generate dummy function definitions], and
+[https://genodians.org/skalk/2021-06-21-dde-linux-experiments-2 - Choose Compilation Units].
+
+Port of the Linux kernel module
+-------------------------------
+
+:Implementation:
+
+As we started porting WireGuard, we first added all required Linux headers and
+generated “trap” implementations for all undefined references that, when being
+called, securely hang the program with a descriptive error message. Throughout
+the development process, we continuously tested the port for each new feature.
+Thereby, we fell into the safety nets we initially spanned - the third-party
+code showed us which of the trap functions were actually used in the field.
+
+[image 2022-05-31-wireguard-1-1] Internal structure of the WireGuard port
+
+Those had then to be categorized further. If the function was only about some
+kernel-internal bureaucracy that often is of no interest in the Genode context,
+we could replace the trap implementation with a callable dummy (see Figure 1).
+If the functionality was actually important, and the original Linux
+implementation was relatively self-standing, then we replaced the trap
+implementation by adding the corresponding third-party source file instead.
+Only if this didn’t apply either, because it would have added to many
+dependencies or unwanted ones, we fell back to a Genode-specific
+reimplementation of the functionality.
+
+Once the WireGuard code compiled and was properly initialized by the Linux
+emulation, we had to feed it a basic configuration - a private key, a port
+address, and a second peer’s identification. In Linux, this is done by a user
+program communicating to the kernel driver via sockets and the Generic Netlink
+mechanism, which both comprise quite some code on their own. As we saw no
+pressing need for pulling all that technicality into the port as well, we
+instead tried the approach of calling the driver code directly from the Genode
+side of the port. After acquiring some expertise on Generic Netlink
+interfacing, we succeeded with this plan.
+
+Now that we were able to talk to WireGuard, our configuration data had to come
+from somewhere. Genode programs are configured each through an exclusive XML
+file available to them right from their start and that can be dynamically
+updated from the outside. So, it was a natural choice to retrieve the
+parameters for the WireGuard driver from the XML configuration of the
+surrounding Genode program. Furthermore, we ensured that the program
+incrementally updates the WireGuard parameters on changes to its own XML
+configuration. This allows a second Genode program - that has permission to
+write the XML configuration - to implement the same semantics as the WireGuard
+configuration tool on Linux, but following Genode’s natural patterns.
+
+With the configuration in place, the code now longed for some network traffic.
+Again we first tried the approach of directly speaking to the driver code,
+bypassing the manifold windings of the Linux IP stack and socket API normally
+involved in this endeavor. Speaking the language of the socket buffer that
+forms the central data structure piped through all this code indeed was a
+challenge. But eventually it worked out and spared us a good quantity of
+additional complexity in the port.
+
+On the native side of the port, the network traffic originates from two Genode
+network sessions that connect the program with other programs of the Genode
+networking stack, such as network-card drivers or software routers. One session
+is for the VPN-internal side of WireGuard where the private packets are
+exchanged with the VPN users in plain text. The other session is for the
+public-network side of WireGuard where the same packets are exchanged encrypted
+and UDP-encapsulated with the other WireGuard instances.
+
+:Integration:
+
+As indicated before, the WireGuard port connects to remote services through two
+sessions that are constrained to the exchange of raw network packets. The two
+sessions reflect the two different roles that the Linux implementation has when
+it comes to networking. The network interface towards the VPN participants (the
+private side) and the IP peer in the untrusted network (the public side). The
+Genode port acts according to these roles.
+
+[image 2022-05-31-wireguard-1-2] Integration of the WireGuard port
+
+On the public side, the program implements an IP stack that handles the ARP
+protocol and can be configured either statically or by acting as DHCP client.
+Apart from that, the public side handles solely UDP packets on the configured
+listen port. On the private side, the program has a virtual MAC address and
+drives its own link state similar to a network card. ARP isn’t passed through
+the tunnel. Hence, the program ignores it at the private side. Traffic to and
+from this side of the program is broadcasted on the link layer. This doesn’t
+form a scalability issue, as we’ll see soon.
+
+The natural approach for integrating WireGuard into Genode’s network stack
+would be to connect it to two instances of Genode’s native software router (see
+Figure 2). Genode’s software router is a program that can act as IP peer in
+different IP subnets. If other applications and network devices establish
+network sessions with the router, the router plugs them into one of those IP
+subnets according to user-defined policies. The router then acts as hub for
+subnet-local traffic at each of the subnets and as gateway that mediates
+between the subnets following user-defined routing rules. By default, however,
+the subnets are isolated against each other. They can communicate only if the
+router configuration explicitly allows it.
+
+The router at the private side of the WireGuard port (the “inner” router) forms
+one IP peer in the VPN-internal subnet (10.0.9.0/24) and will, in addition to
+this, plug only the WireGuard session into that subnet (as there are only two
+peers required in this subnet, the previously mentioned restriction to layer-1
+broadcasts is no issue). The inner router’s IP peer in the VPN-internal subnet
+is configured with the IP address that we would normally assign in Linux to the
+WireGuard interface (10.0.9.1). The user can then define forward rules for
+packets that come from WireGuard and address the router IP-peer in the
+VPN-internal subnet to other subnets at the inner router (like 10.2.17.0/24).
+Likewise, the user can define rules for routing traffic from the other subnets
+to the VPN-internal subnet.
+
+To sum it up, the inner router is similar to the Linux IP stack behind the
+WireGuard interface in Linux and the routing tables that handle VPN-internal
+communication. There are two major differences to Linux, however. In contrast
+to the IP stack and routing mechanism of Linux, the Genode router is a
+relatively small program that runs isolated against the rest of the system.
+And, no network traffic is routed without clear permission by the user.
+Applications and networks behind the inner router can access both the WireGuard
+tunnel and other networks only if explicitly specified by the user.
+
+The router at the public-network side of the WireGuard port (the outer router)
+connects the IP peer of WireGuard to a subnet that would normally also
+contain a session of a network device driver (192.168.178.0/24). This way, the
+virtual WireGuard peer gains access to the physical part of that subnet that
+lays behind the network device. In this context, the outer router is merely a
+hub and if the WireGuard peer requests, for instance, DHCP, it has to be served
+by a peer inside the physical part of the subnet.
+
+With this minimal setup, applications and networks behind the inner router are
+restricted to the WireGuard tunnel if they attempt to talk to the outer
+world. However, the inner and outer router can be used to create more elaborate
+scenarios. The user could allow for certain kinds of traffic to bypass
+WireGuard and maybe leave the machine NAT’ed by the outer router instead.
+Different network devices that lead to different subnets can be integrated and
+routed individually. Multiple WireGuard tunnels can be provided to different
+applications or different kinds of traffic. While providing great flexibility,
+the core mechanism behind all this consists of only two small programs and
+their XML configurations.
+
+Demo Scenarios
+--------------
+
+Throughout the development process, we created several demo scenarios that
+showcase the functionality of our port.
+
+:wg_ping_inwards.run:
+
+This scenario runs Genode with a WireGuard instance and the above mentioned
+inner and outer router in a Qemu emulation on a Linux host. The host then
+creates a WireGuard interface itself, routes it to the Qemu network interface
+and pings the IP peer of the inner Genode router inside the VPN-internal
+subnet.
+
+:wg_ping_outwards.run:
+
+This scenario is quite similar to the first one, the difference being that,
+instead of the host ping, it starts a ping program behind the inner Genode
+router that pings the host’s VPN-internal IP peer through the WireGuard tunnel.
+
+:wg_lighttpd.run:
+
+In this scenario, Genode brings up a port of the Lighttpd HTTP-server behind
+the inner router and provides its service through WireGuard to the VPN subnet.
+The scenario also sets-up a proper WireGuard-interface at the host, so, that
+the server can be reached without further ado.
+
+:wg_fetchurl.run:
+
+In contrast to the above mentioned scenarios, this one is not connected to
+the outer world through a network interface. It spawns two instances of
+Genode’s WireGuard component with the network router mediating between them.
+Behind one side of the tunnel, a Lighttpd server is hosted. Behind the other
+side, a port of Linux’ FetchURL attempts to download the index file from the
+HTTP server. The scenario can be used to send a file of any content and size
+through a completely Genode-hosted WireGuard tunnel. As the router in between
+the tunnel endpoints does also NAT and several subnet transitions, the scenario
+is already pretty similar to a tunnel over a wider network, like the Internet.
+
+:Sculpt package:
+
+The WireGuard package makes it possible to download and deploy the WireGuard
+port in the Genode-based Sculpt desktop OS with only a few clicks. Multiple
+instances can be deployed and configured differently via the Sculpt GUI.
