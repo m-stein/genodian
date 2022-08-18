@@ -40,56 +40,56 @@ plus the current Genode source tree for some library dependencies. Make sure to
 have the following variables set appropriately in your '.goarc' file (example
 values):
 
-! set depot_dir                        /home/martin/depot
-! set depot_user                       martin
-! set depot_overwrite                  1
-! set version(local/api/pcsc-lite)     1970-01-01
-! set version(local/src/pcsc-lite)     1970-01-01
-! set version(local/src/libusb)        1970-01-01
-! set version(local/src/vfs_libusb)    1970-01-01
-! set version(local/api/libc)          1970-01-01
-! set version(local/src/libc)          1970-01-01
-! set version(local/api/posix)         1970-01-01
-! set version(local/src/posix)         1970-01-01
-! set version(local/api/vfs)           1970-01-01
-! set version(local/src/vfs)           1970-01-01
-! set version(local/src/opensc_pkcs11) 1970-01-01
+! set depot_dir                /depot
+! set depot_user               martin
+! set depot_overwrite          1
+! set versions_from_genode_dir /genode
 
-Build the listed 'src' and 'api' archives from the Genode repository into the
-configured depot directory and set the version values in the '.goarc' file
-accordingly. Make sure that you have the most recent version of the GOA tool:
+Build the required archives from within the Genode repository into the
+configured depot directory (replace "martin" with your depot user-name):
 
-! $ goa update-goa
+! /genode$ ./tool/depot/create -j8 \
+!   martin/api/libc martin/api/pcsc-lite martin/api/posix
+!   DEPOT_DIR=/tmp/depot/ UPDATE_VERSIONS=1 FORCE=1 REBUILD=
+
+Make sure that you have the most recent version of the GOA tool:
+
+! /goa_projects/pkcs11_tool$ goa update-goa
 
 Now you can build and export the GOA project itself:
 
-! $ goa export
+! /goa_projects/pkcs11_tool$ goa export
 
 Once, GOA has successfully exported the PKCS#11-tool package to your depot
 directory, you can use the 'repos/world/run/pkcs11_tool.run' script in your
 Genode directory in order to test-drive the program in a Qemu VM on your host
-Linux. But first, make sure that your Genode build directory uses the same
+Linux.
+
+[image 2022-08-18-pkcs11-tool-1-2] pkcs11_tool.run listing the objects on a smart card
+
+But first, make sure that your Genode build directory uses the same
 depot setup as GOA:
 
-! $ echo "RUN_OPT += --depot-user martin"            >> etc/build.conf
-! $ echo "RUN_OPT += --depot-dir /home/martin/depot" >> etc/build.conf
+! /genode/build/x86_64$ echo "RUN_OPT += --depot-user martin" >> etc/build.conf
+! /genode/build/x86_64$ echo "RUN_OPT += --depot-dir /depot"  >> etc/build.conf
 
 The script passes through a host USB device to the PKCS#11 tool in the VM.
 Before running the script, you have to determine the USB bus address and device
 address of the USB smart card:
 
-! $ lsusb
+! /genode/build/x86_64$ lsusb
 ! ...
 ! Bus 001 Device 004: ID 20a0:4108 Clay Logic Nitrokey Pro
 
 Then, you may have to make the USB device accessible to the user of the run
 script. A temporary way would be as follows:
 
-! $ sudo chmod u+rw /dev/bus/usb/001/004
+! /genode/build/x86_64$ sudo chmod a+rw /dev/bus/usb/001/004
 
 The run script finally can be invoked by:
 
-! $ make run/pkcs11_tool KERNEL=nova BOARD=pc USB_BUS_ADDR=1 USB_DEV_ADDR=4
+! /genode/build/x86_64$ make run/pkcs11_tool \
+!   KERNEL=nova BOARD=pc USB_BUS_ADDR=1 USB_DEV_ADDR=4
 
 The PKCS#11 tool can be equipped with individual command-line options inside
 the run script. For a reference of available command-line options please refer
