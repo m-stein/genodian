@@ -1,13 +1,13 @@
                          USB smart cards via PKCS#11
 
-With the 22.08 release, Genode gains support for accesing USB smart-card
+With the 22.08 release, Genode gains support for accessing USB smart-card
 devices like typical authentication and HSM keys via PKCS#11.
 
 [image 2022-08-18-pkcs11-tool-1-1]
 
 A [https://github.com/nfeske/goa - GOA-based] port of the
 [https://github.com/OpenSC/OpenSC/wiki - OpenSC] PKCS#11-tool has become
-available in Sculpt through the package 'mstein -> tools -> pkcs11_tool'. The
+available in Sculpt through the package 'mstein -> pkcs11_tool'. The
 package merely requires a route to the USB session of your USB smart card.
 In order to make this session available, you have to permit access for the
 tool at the USB driver first. Plug in the device and look up its vendor and
@@ -27,13 +27,24 @@ start it:
 !   ...
 !   <config>
 !
-!       <vfs>
-!         <dir name="dev">
-!           <log/> <libusb/> <dir name="pipe"> <pipe/> </dir>
-!         </dir>
-!       </vfs>
+!       <libc stdout="/dev/log"
+!             stderr="/dev/log"
+!             pipe="/dev/pipe"
+!             rtc="/dev/rtc"/>
 !
-!       <libc stdout="/dev/log" stderr="/dev/log" pipe="/dev/pipe"/>
+!       <vfs>
+!          <dir name="dev">
+!             <log/>
+!             <libusb/>
+!             <inline name="rtc">2022-07-12 00:01</inline>
+!             <dir name="pipe"> <pipe/> </dir>
+!          </dir>
+!          <dir name="ifd-ccid.bundle">
+!             <dir name="Contents">
+!                <rom name="Info.plist"/>
+!             </dir>
+!          </dir>
+!       </vfs>
 !
 !       <arg value="pkcs11-tool" />
 !       <arg value="--module" />
