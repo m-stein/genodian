@@ -8,8 +8,20 @@ devices like typical authentication and HSM keys via PKCS#11.
 A [https://github.com/nfeske/goa - GOA-based] port of the
 [https://github.com/OpenSC/OpenSC/wiki - OpenSC] PKCS#11-tool has become
 available in Sculpt through the package 'mstein -> tools -> pkcs11_tool'. The
-package merely requires a route to the USB session of your USB smart card. The
-program can be configured through its launcher:
+package merely requires a route to the USB session of your USB smart card.
+In order to make this session available, you have to permit access for the
+tool at the USB driver first. Plug in the device and look up its vendor and
+product ID in the file '/reports/drivers/usb_devices'. With this information
+add a policy to the file '/config/usb' as follows (example IDs):
+
+! <usb>
+!   <policy label="runtime -> pkcs11_tool -> usb_device"
+!           vendor_id="0x4e6"
+!           product_id="0x5816"/>
+! </usb>
+
+You also may want to configure the PKCS#11 tool through its launcher before you
+start it:
 
 ! <launcher ...>
 !   ...
@@ -51,7 +63,7 @@ configured depot directory (replace "martin" with your depot user-name):
 
 ! /genode$ ./tool/depot/create -j8 \
 !   martin/api/libc martin/api/pcsc-lite martin/api/posix
-!   DEPOT_DIR=/tmp/depot/ UPDATE_VERSIONS=1 FORCE=1 REBUILD=
+!   DEPOT_DIR=/depot/ UPDATE_VERSIONS=1 FORCE=1 REBUILD=
 
 (By the way, these APIs are listed in 'goa_projects/pkcs11_tool/used_apis')
 Make sure that you have the most recent version of the GOA tool:
@@ -102,14 +114,17 @@ create the dependency binary archives via the Genode directory (again, replace
 the user name):
 
 ! /genode$ ./tool/depot/create -j8 \
-!   martin/bin/x86_64/posix \
-!   martin/bin/x86_64/libc \
-!   martin/bin/x86_64/vfs \
-!   martin/bin/x86_64/pcsc-lite \
-!   martin/bin/x86_64/libusb \
-!   martin/bin/x86_64/vfs_libusb \
-!   martin/bin/x86_64/opensc_pkcs11 \
-!   DEPOT_DIR=/tmp/depot/ UPDATE_VERSIONS=1 FORCE=1 REBUILD=
+!   martin/src/openssl
+!   martin/src/stdcxx
+!   martin/src/opensc_pkcs11
+!   martin/src/posix
+!   martin/src/libc
+!   martin/src/pcsc-lite
+!   martin/src/libusb
+!   martin/src/vfs
+!   martin/src/vfs_libusb
+!   martin/src/vfs_pipe
+!   DEPOT_DIR=/depot UPDATE_VERSIONS=1 FORCE=1 REBUILD=
 
 (Note that these archives are listed in
 'goa_projects/pkcs11_tool/pkg/pkcs11_tool/archives')
