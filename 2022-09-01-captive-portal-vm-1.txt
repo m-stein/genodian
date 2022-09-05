@@ -10,7 +10,15 @@ Firefox.
 
 [image 2022-09-01-captive-portal-vm-1-1]
 
-Should you have found any bugs in the tutorial, please report them to me!
+Before starting, I'd also like to mention some additional recources created by
+Johannes Schlatow that accompany the tutorial:
+* Some tooling for remastering TinyCore images at
+  [https://github.com/jschlatow/tinycore-remaster]
+* A documentation of the efforts of applying this tutorial to newer versions of
+  VirtualBox and TinyCore at
+  [https://github.com/genodelabs/genode/issues/3462#issuecomment-871356837]
+
+If you find any bugs in the tutorial, please report them to me!
 
 Set up TinyCore
 ---------------
