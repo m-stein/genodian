@@ -36,8 +36,8 @@ local time (the age of the timer connection you just created), do the
 following:
 
 ! Genode::Duration time { timer.curr_time() };
-! Genode::Milliseconds time_ms { timer.trunc_to_plain_us() };
-! Genode::Microseconds time_us { timer.trunc_to_plain_ms() };
+! Genode::Milliseconds time_ms { time.trunc_to_plain_us() };
+! Genode::Microseconds time_us { time.trunc_to_plain_ms() };
 
 It's fine to call the 'curr_time' method from this example very often. The
 time it returns is locally interpolated, i.e. the call doesn't imply any RPC
