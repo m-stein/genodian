@@ -1,0 +1,37 @@
+                        Genode at the FOSDEM 2023
+
+Last week, I returned from the FOSDEM 2023 in Brussels and it was a great joy
+for me after all these years to finally see a real-live FOSDEM again. Besides
+belgian fries and sweetened mate tea, one could once again get a taste of
+Genode at the conference. This year, the OS framework received 3 presentation
+in two different tracks.
+
+The presentation that maybe was the biggest surprise for me was "Using Genode
+as an enabler for research on modern operating systems" by Michael Müller from
+the University Osnabrück. As most time of the year I'm deep down some technical
+innards of Genode in our office in Dresden, it's a real pleasure for me to see
+someone from the "outer world" using Genode for his day-to-day work and being
+so motivated by it that he travels to Brussels and holds a talk about it. You
+can access the recording of the talk here:
+
+https://fosdem.org/2023/schedule/event/genode/
+
+The most impressive and promising Genode talk for me was "Can Genode on the
+PinePhone question the notion of a smartphone?" by Norman Feske. He
+demonstrates the current state of one of the main directions at Genode Labs
+currently: conquering the smartphone world with fresh concepts. He also carried
+a full box of printed Genode "Foundations" and "Platforms" books. After the
+presentation they disappeared in no time, leaving us with an astonished smile.
+You can watch the video online:
+
+https://fosdem.org/2023/schedule/event/genode_on_the_pinephone/
+
+The presentation I learned the most from myself was "Device driver gardening"
+by Stefan Kalkowski. He developed the modernized and much faster approach for
+porting Linux device drivers to Genode. In the talk he even gives a short
+demonstration of how it works. The video is available here:
+
+https://fosdem.org/2023/schedule/event/ddtransplant/
+
+I hope you enjoy the talks as much as I have.
+See you soon!
