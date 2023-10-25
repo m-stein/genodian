@@ -1,0 +1,55 @@
+            Migration of incompatible File Vault containers
+
+The [https://genodians.org/m-stein/2021-05-17-introducing-the-file-vault - File Vault]
+is a graphical tool for creating and managing encrypted file
+containers in Genode. The first official version was published with Sculpt
+21.03b. Since then, the File Vault is part of the basic tooling for Sculpt.
+
+The File Vault in Sculpt 23.10 is the first one not to be backwards-compatible.
+So, containers created with File Vault 23.04 or earlier are not accessible with
+File Vault 23.10. However, attempting to open an older container with File
+Vault 23.10 doesn't do harm to the container.
+
+In order to allow for a smooth transition, Sculpt 23.10 provides a migration
+approach for File Vault users. The idea is to use a forward-port of the old
+File Vault to decrypt all files and then copy them to a new File Vault 23.10
+container.
+
+For this tutorial, I assume that you are using the recall_fs package as file
+system server for the 'data' and 'trust_anchor' sessions of your File Vault.
+First, install and deploy '+ -> genodelabs -> tools -> system_shell' with the
+the 'target' File System routed to the File System that recall_fs uses and do
+
+! mv rw/recall/file_vault rw/recall/file_vault_23_04
+
+Then, you'll need my package index. You can download it via
+'+ -> depot -> selection -> mstein'. Now, install and deploy the
+'+ -> depot -> mstein -> file_vault_23_04' package and route its 'data' file
+system to the old File Vault container. It's fine if your container is older
+than 23.04, as version 23.04 was fully backwards-compatible.
+
+As soon as you have unlocked your old container in File Vault 23.04 by entering
+the passphrase, look up its Client FS dimensions. Install and deploy
+'+ -> depot -> genodelabs -> tools -> file_vault' package and create a new
+container with an equally sized or bigger Client FS. Leave both, the old and
+the new File Vault running and unlocked.
+
+Next, deploy the '+ -> genodelabs -> tools -> system_shell' package a second
+time but this time route the 'report' FS to file_vault_23_04 and the
+'config' FS to file_vault. The 'target' FS route is not important. Inside this
+second shell, do
+
+! cp -rfv report/* config/
+
+After that, the content of both File Vault containers should be identical and
+the new container should integrate into your system without further ado. You
+can now close file_vault_23_04 and the two system_shell instances. Just to be
+sure, I'd advice you to keep your old container as back up for a while. In
+general, it is advisable to not store critical data in the File Vault yet or at
+least have a differently secured back-up as the File Vault project is still
+quite in flux.
+
+Related articles
+----------------
+
+* [https://genodians.org/m-stein/2021-05-17-introducing-the-file-vault]

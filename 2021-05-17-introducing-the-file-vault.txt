@@ -6,8 +6,6 @@ of the vault was just published for Sculpt 21.03b in my depot
 'mstein -> Tools -> file vault'. Therefore, I'll give a short overview of
 the program.
 
-_Edit 2021-05-18 by Martin Stein: Add passage about client system-shell._
-
 First of all, please keep in mind that the File Vault, so far, has not been
 used in a long-term in real-life scenarios. Actually, this is what the current
 version is all about. Therefore, you should refrain from storing critical data
@@ -150,3 +148,14 @@ correct, the decrypted master key is as well. The master key is then used to
 unlock the vault and the main controls are shown again. I the passphrase was
 incorrect, you have to wait 3 seconds in order to re-type it and retry
 unlocking the vault.
+
+Related articles
+----------------
+
+* [https://genodians.org/m-stein/2023-10-25-file-vault-migration-1]
+
+Modification history
+--------------------
+
+* 2021-05-18 by Martin Stein: Add passage about client system-shell
+* 2023-10-25 by Martin Stein: Add links to related articles
